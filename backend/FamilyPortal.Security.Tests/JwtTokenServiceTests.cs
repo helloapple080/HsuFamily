@@ -3,6 +3,7 @@ using FamilyPortal.Domain.Enums;
 using FamilyPortal.Infrastructure.Security;
 using Microsoft.Extensions.Options;
 using MongoDB.Bson;
+using Xunit;
 
 namespace FamilyPortal.Security.Tests;
 

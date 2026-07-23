@@ -1,4 +1,5 @@
 using FamilyPortal.Infrastructure.Security;
+using Xunit;
 
 namespace FamilyPortal.Security.Tests;
 
