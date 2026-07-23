@@ -1,6 +1,7 @@
 using FamilyPortal.Application.Interfaces;
 using FamilyPortal.Domain.Entities;
 using FamilyPortal.Domain.ValueObjects;
+using MongoDB.Bson;
 using MongoDB.Driver;
 
 namespace FamilyPortal.Infrastructure.MongoDB;
@@ -25,20 +26,83 @@ public class UserRepository : MongoRepository<User>, IUserRepository
     }
 
     /// <inheritdoc />
-    public async Task<User?> GetByRefreshTokenAsync(string token)
-    {
-        return await _collection
-            .Find(u => u.RefreshToken != null && u.RefreshToken.Token == token)
-            .FirstOrDefaultAsync();
-    }
-
-    /// <inheritdoc />
-    public async Task UpdateRefreshTokenAsync(string userId, RefreshToken? refreshToken)
+    public async Task ReplaceRefreshTokensAsync(
+        string userId,
+        IReadOnlyCollection<RefreshToken> refreshTokens)
     {
         var update = Builders<User>.Update
-            .Set(u => u.RefreshToken, refreshToken)
+            .Set(u => u.RefreshTokens, refreshTokens.ToList())
             .Set(u => u.UpdatedAt, DateTime.UtcNow);
 
         await _collection.UpdateOneAsync(u => u.Id == userId, update);
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> RotateRefreshTokenAsync(
+        string userId,
+        string currentTokenHash,
+        RefreshToken newRefreshToken)
+    {
+        var now = DateTime.UtcNow;
+        var filter = Builders<User>.Filter.And(
+            Builders<User>.Filter.Eq(u => u.Id, userId),
+            Builders<User>.Filter.ElemMatch(
+                u => u.RefreshTokens,
+                token => token.TokenHash == currentTokenHash &&
+                         token.RevokedAt == null &&
+                         token.ExpiresAt > now));
+
+        var update = Builders<User>.Update
+            .Set("refreshTokens.$.revokedAt", now)
+            .Set("refreshTokens.$.replacedByTokenHash", newRefreshToken.TokenHash)
+            .Push(u => u.RefreshTokens, newRefreshToken)
+            .Set(u => u.UpdatedAt, now);
+
+        var result = await _collection.UpdateOneAsync(filter, update);
+        return result.ModifiedCount == 1;
+    }
+
+    /// <inheritdoc />
+    public async Task RevokeTokenFamilyAsync(string userId, string familyId)
+    {
+        var now = DateTime.UtcNow;
+        var filter = Builders<User>.Filter.Eq(u => u.Id, userId);
+        var update = Builders<User>.Update
+            .Set("refreshTokens.$[token].revokedAt", now)
+            .Set(u => u.UpdatedAt, now);
+        var options = new UpdateOptions
+        {
+            ArrayFilters =
+            [
+                new BsonDocumentArrayFilterDefinition<BsonDocument>(
+                    new BsonDocument
+                    {
+                        { "token.familyId", familyId },
+                        { "token.revokedAt", BsonNull.Value }
+                    })
+            ]
+        };
+
+        await _collection.UpdateOneAsync(filter, update, options);
+    }
+
+    /// <inheritdoc />
+    public async Task RevokeAllRefreshTokensAsync(string userId)
+    {
+        var now = DateTime.UtcNow;
+        var filter = Builders<User>.Filter.Eq(u => u.Id, userId);
+        var update = Builders<User>.Update
+            .Set("refreshTokens.$[token].revokedAt", now)
+            .Set(u => u.UpdatedAt, now);
+        var options = new UpdateOptions
+        {
+            ArrayFilters =
+            [
+                new BsonDocumentArrayFilterDefinition<BsonDocument>(
+                    new BsonDocument("token.revokedAt", BsonNull.Value))
+            ]
+        };
+
+        await _collection.UpdateOneAsync(filter, update, options);
     }
 }

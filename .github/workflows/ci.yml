@@ -22,11 +22,15 @@ jobs:
 
       - name: Restore
         working-directory: backend
-        run: dotnet restore FamilyPortal.Api/FamilyPortal.Api.csproj
+        run: dotnet restore FamilyPortal.slnx
 
       - name: Build
         working-directory: backend
-        run: dotnet build FamilyPortal.Api/FamilyPortal.Api.csproj --no-restore --configuration Release
+        run: dotnet build FamilyPortal.slnx --no-restore --configuration Release
+
+      - name: Test
+        working-directory: backend
+        run: dotnet test FamilyPortal.Security.Tests/FamilyPortal.Security.Tests.csproj --no-build --configuration Release --collect:"XPlat Code Coverage"
 
   frontend:
     name: Frontend

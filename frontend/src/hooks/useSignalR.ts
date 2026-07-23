@@ -6,14 +6,14 @@ import { useAuthStore } from '@/stores/authStore'
 
 export function useSignalR() {
   const connectionRef = useRef<signalR.HubConnection | null>(null)
-  const { accessToken } = useAuthStore()
+  const { isAuthenticated } = useAuthStore()
 
   useEffect(() => {
-    if (!accessToken) return
+    if (!isAuthenticated) return
 
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'}/hubs/calendar`, {
-        accessTokenFactory: () => accessToken,
+        withCredentials: true,
       })
       .withAutomaticReconnect([0, 2000, 5000, 10000, 30000]) // 重連策略
       .configureLogging(signalR.LogLevel.Information)
@@ -42,7 +42,7 @@ export function useSignalR() {
     return () => {
       connection.stop()
     }
-  }, [accessToken])
+  }, [isAuthenticated])
 
   // 訂閱事件
   const on = useCallback((event: string, callback: (...args: unknown[]) => void) => {

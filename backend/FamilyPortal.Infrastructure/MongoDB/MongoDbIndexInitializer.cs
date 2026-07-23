@@ -43,10 +43,10 @@ public class MongoDbIndexInitializer
                 Builders<User>.IndexKeys.Ascending(u => u.Email),
                 new CreateIndexOptions { Unique = true, Name = "idx_email_unique" }
             ),
-            // Refresh Token 查詢索引（稀疏索引，只索引有值的文件）
+            // Refresh Token 雜湊查詢索引（資料庫不保存原始 Token）
             new(
-                Builders<User>.IndexKeys.Ascending("refreshToken.token"),
-                new CreateIndexOptions { Sparse = true, Name = "idx_refresh_token" }
+                Builders<User>.IndexKeys.Ascending("refreshTokens.tokenHash"),
+                new CreateIndexOptions { Sparse = true, Name = "idx_refresh_token_hash" }
             )
         };
 

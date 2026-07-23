@@ -1,70 +1,91 @@
-import axios from 'axios'
+import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios'
+import { useAuthStore } from '@/stores/authStore'
+import type { ApiResponse } from '@/types/api'
 
-/// Axios API Client 實體 — 統一管理 API 請求
-const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001',
-  headers: {
-    'Content-Type': 'application/json',
-  },
+interface CsrfTokenResponse {
+  token: string
+}
+
+interface RetryableRequestConfig extends InternalAxiosRequestConfig {
+  _retry?: boolean
+}
+
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'
+const unsafeMethods = new Set(['post', 'put', 'patch', 'delete'])
+
+/// 不含攔截器的 Client，避免取得 CSRF Token 或 refresh 時遞迴。
+const sessionClient = axios.create({
+  baseURL: apiBaseUrl,
+  withCredentials: true,
+  headers: { 'Content-Type': 'application/json' },
   timeout: 15000,
 })
 
-/// 請求攔截器 — 自動附加 JWT Token
-api.interceptors.request.use(
-  (config) => {
-    // 在 Client 端從 Zustand store 取得 Token
-    if (typeof window !== 'undefined') {
-      const authState = JSON.parse(
-        localStorage.getItem('auth-storage') || '{}'
-      )
-      const token = authState?.state?.accessToken
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`
-      }
-    }
-    return config
-  },
-  (error) => Promise.reject(error)
-)
+let csrfToken: string | null = null
+let csrfRequest: Promise<string> | null = null
+let refreshRequest: Promise<void> | null = null
 
-/// 回應攔截器 — 處理 401 (Token 過期) 自動重新取得
+async function getCsrfToken(): Promise<string> {
+  if (csrfToken) return csrfToken
+
+  csrfRequest ??= sessionClient
+    .get<ApiResponse<CsrfTokenResponse>>('/api/auth/csrf')
+    .then(({ data }) => {
+      if (!data.success || !data.data?.token) {
+        throw new Error('無法取得 CSRF Token')
+      }
+      csrfToken = data.data.token
+      return csrfToken
+    })
+    .finally(() => {
+      csrfRequest = null
+    })
+
+  return csrfRequest
+}
+
+async function refreshSession(): Promise<void> {
+  const token = await getCsrfToken()
+  await sessionClient.post('/api/auth/refresh', undefined, {
+    headers: { 'X-XSRF-TOKEN': token },
+  })
+}
+
+/// Axios API Client — 憑證只透過 HttpOnly Cookie 傳送。
+const api = axios.create({
+  baseURL: apiBaseUrl,
+  withCredentials: true,
+  headers: { 'Content-Type': 'application/json' },
+  timeout: 15000,
+})
+
+api.interceptors.request.use(async (config) => {
+  if (unsafeMethods.has(config.method?.toLowerCase() ?? '')) {
+    config.headers.set('X-XSRF-TOKEN', await getCsrfToken())
+  }
+  return config
+})
+
 api.interceptors.response.use(
   (response) => response,
-  async (error) => {
-    const originalRequest = error.config
+  async (error: AxiosError) => {
+    const originalRequest = error.config as RetryableRequestConfig | undefined
+    const isAuthRequest = originalRequest?.url?.startsWith('/api/auth/login') ||
+      originalRequest?.url?.startsWith('/api/auth/refresh')
 
-    // 避免無限重試
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && originalRequest && !originalRequest._retry && !isAuthRequest) {
       originalRequest._retry = true
 
       try {
-        const authState = JSON.parse(
-          localStorage.getItem('auth-storage') || '{}'
-        )
-        const { accessToken, refreshToken } = authState?.state || {}
-
-        if (accessToken && refreshToken) {
-          const response = await axios.post(
-            `${api.defaults.baseURL}/api/auth/refresh`,
-            { accessToken, refreshToken }
-          )
-
-          if (response.data?.success) {
-            const newToken = response.data.data.accessToken
-            // 更新 localStorage（Zustand persist）
-            authState.state.accessToken = response.data.data.accessToken
-            authState.state.refreshToken = response.data.data.refreshToken
-            localStorage.setItem('auth-storage', JSON.stringify(authState))
-
-            originalRequest.headers.Authorization = `Bearer ${newToken}`
-            return api(originalRequest)
-          }
-        }
+        refreshRequest ??= refreshSession().finally(() => {
+          refreshRequest = null
+        })
+        await refreshRequest
+        return api(originalRequest)
       } catch {
-        // Refresh 失敗，清除登入狀態
-        localStorage.removeItem('auth-storage')
-        if (typeof window !== 'undefined') {
-          window.location.href = '/login'
+        useAuthStore.getState().logout()
+        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+          window.location.assign('/login')
         }
       }
     }

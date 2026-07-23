@@ -8,6 +8,7 @@ using FamilyPortal.Infrastructure.Hubs;
 using FamilyPortal.Infrastructure.MongoDB;
 using FamilyPortal.Infrastructure.Security;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
@@ -48,16 +49,16 @@ builder.Services.AddAuthentication(options =>
         ClockSkew = TimeSpan.Zero // 精確控制 Token 過期時間
     };
 
-    // SignalR JWT 配置 — 從 Query String 取得 Token
+    // API 與 SignalR 統一從 HttpOnly Cookie 取得 JWT，避免 Token 出現在 URL／Log。
     options.Events = new JwtBearerEvents
     {
         OnMessageReceived = context =>
         {
-            var accessToken = context.Request.Query["access_token"];
             var path = context.HttpContext.Request.Path;
 
-            if (!string.IsNullOrEmpty(accessToken) &&
-                path.StartsWithSegments(CalendarHub.HubUrl))
+            if (context.Request.Cookies.TryGetValue("family_access", out var accessToken) &&
+                (path.StartsWithSegments(CalendarHub.HubUrl) ||
+                 path.StartsWithSegments("/api")))
             {
                 context.Token = accessToken;
             }
@@ -72,6 +73,11 @@ builder.Services.AddAuthentication(options =>
 // ─────────────────────────────────────────────
 builder.Services.AddAuthorization(options =>
 {
+    // 未明確標註 [AllowAnonymous] 的端點一律需要登入。
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+
     // Admin 策略 — 需要 Admin 角色
     options.AddPolicy("AdminOnly", policy =>
         policy.RequireRole("Admin"));
@@ -84,7 +90,22 @@ builder.Services.AddAuthorization(options =>
 // ─────────────────────────────────────────────
 // 4. Controllers 與 JSON 配置
 // ─────────────────────────────────────────────
-builder.Services.AddControllers()
+builder.Services.AddAntiforgery(options =>
+{
+    options.HeaderName = "X-XSRF-TOKEN";
+    options.Cookie.Name = "family_antiforgery";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SameSite = SameSiteMode.Strict;
+    options.Cookie.SecurePolicy = builder.Environment.IsProduction()
+        ? CookieSecurePolicy.Always
+        : CookieSecurePolicy.SameAsRequest;
+});
+
+builder.Services.AddControllers(options =>
+    {
+        // Cookie 認證的所有非 GET Controller 請求都必須通過 CSRF 驗證。
+        options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute());
+    })
     .AddJsonOptions(options =>
     {
         // Enum 序列化為字串（非數字）
@@ -142,20 +163,38 @@ builder.Services.AddOpenApi();
 // ─────────────────────────────────────────────
 builder.Services.AddRateLimiter(options =>
 {
-    options.AddFixedWindowLimiter("fixed", limiterOptions =>
-    {
-        limiterOptions.PermitLimit = 100;
-        limiterOptions.Window = TimeSpan.FromMinutes(1);
-        limiterOptions.QueueLimit = 10;
-    });
+    options.AddPolicy("fixed", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.User.Identity?.Name ??
+                          context.Connection.RemoteIpAddress?.ToString() ??
+                          "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 100,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
 
     // 登入端點更嚴格的速率限制（防暴力破解）
-    options.AddFixedWindowLimiter("login", limiterOptions =>
-    {
-        limiterOptions.PermitLimit = 10;
-        limiterOptions.Window = TimeSpan.FromMinutes(5);
-        limiterOptions.QueueLimit = 2;
-    });
+    options.AddPolicy("login", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(5),
+                QueueLimit = 0
+            }));
+
+    options.AddPolicy("refresh", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 30,
+                Window = TimeSpan.FromMinutes(5),
+                QueueLimit = 0
+            }));
 });
 
 // ─────────────────────────────────────────────
@@ -178,7 +217,7 @@ app.UseMiddleware<ExceptionMiddleware>();
 // 開發環境配置
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.MapOpenApi().AllowAnonymous();
 }
 
 // 安全性標頭 Middleware
@@ -200,9 +239,11 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // 路由映射
-app.MapControllers();
-app.MapHub<CalendarHub>(CalendarHub.HubUrl);
-app.MapHealthChecks("/health");
+app.MapControllers().RequireRateLimiting("fixed");
+app.MapHub<CalendarHub>(CalendarHub.HubUrl)
+    .RequireAuthorization()
+    .RequireRateLimiting("fixed");
+app.MapHealthChecks("/health").AllowAnonymous();
 
 // ─────────────────────────────────────────────
 // 應用程式啟動初始化

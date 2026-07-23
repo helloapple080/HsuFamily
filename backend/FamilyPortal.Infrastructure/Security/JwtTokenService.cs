@@ -59,14 +59,26 @@ public class JwtTokenService : ITokenService
     }
 
     /// <inheritdoc />
-    public RefreshToken GenerateRefreshToken()
+    public GeneratedRefreshToken GenerateRefreshToken(string? familyId = null)
     {
-        return new RefreshToken
+        var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+        return new GeneratedRefreshToken
         {
-            Token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64)),
-            ExpiresAt = DateTime.UtcNow.AddDays(_settings.RefreshTokenExpirationDays),
-            CreatedAt = DateTime.UtcNow
+            Token = token,
+            PersistedToken = new RefreshToken
+            {
+                TokenHash = HashRefreshToken(token),
+                FamilyId = familyId ?? Guid.NewGuid().ToString("N"),
+                ExpiresAt = DateTime.UtcNow.AddDays(_settings.RefreshTokenExpirationDays),
+                CreatedAt = DateTime.UtcNow
+            }
         };
+    }
+
+    /// <inheritdoc />
+    public string HashRefreshToken(string token)
+    {
+        return Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
     }
 
     /// <inheritdoc />

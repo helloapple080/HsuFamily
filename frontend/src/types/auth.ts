@@ -19,16 +19,8 @@ export interface LoginRequest {
 
 /// 登入回應
 export interface LoginResponse {
-  accessToken: string
-  refreshToken: string
   expiresAt: string
   user: UserInfo
-}
-
-/// Token 更新請求
-export interface RefreshTokenRequest {
-  accessToken: string
-  refreshToken: string
 }
 
 /// 註冊請求

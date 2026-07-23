@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 
 namespace FamilyPortal.Infrastructure.Hubs;
@@ -8,6 +9,7 @@ namespace FamilyPortal.Infrastructure.Hubs;
 /// 當 Admin 新增、修改或刪除事件時，透過此 Hub 廣播給所有在線用戶
 /// 前端收到通知後可即時更新行事曆畫面，無需手動重整
 /// </summary>
+[Authorize]
 public class CalendarHub : Hub
 {
     /// <summary>Hub 路由路徑</summary>

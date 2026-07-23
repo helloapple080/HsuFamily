@@ -78,7 +78,7 @@ dotnet watch --project FamilyPortal.Api
 
 ## MongoDB 索引
 啟動時自動建立 10+ 索引，包含：
-- Users: `username` (unique), `email` (unique), `refreshToken.token` (sparse)
+- Users: `username` (unique), `email` (unique), `refreshTokens.tokenHash` (sparse)
 - Members: `isActive + sortOrder`, `name`
 - Events: `startDate + eventType`, `tags`, `lunarDate.*`
 - Itineraries: `date + tags`, `participants.memberId + date`, text index

@@ -38,9 +38,9 @@ public class User : BaseEntity
     [BsonRepresentation(BsonType.ObjectId)]
     public string? LinkedMemberId { get; set; }
 
-    /// <summary>Refresh Token（嵌套）</summary>
-    [BsonElement("refreshToken")]
-    public RefreshToken? RefreshToken { get; set; }
+    /// <summary>Refresh Token 輪替歷史（僅保存雜湊）</summary>
+    [BsonElement("refreshTokens")]
+    public List<RefreshToken> RefreshTokens { get; set; } = [];
 
     /// <summary>帳號是否啟用</summary>
     [BsonElement("isActive")]

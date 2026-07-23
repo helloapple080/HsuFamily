@@ -6,7 +6,7 @@ const path = require('path')
 dotenv.config({ path: path.join(__dirname, '../../../.env') })
 
 const rootPassword = process.env.MONGO_ROOT_PASSWORD || 'ChangeMe2026'
-const uri = `mongodb://familyportal:${rootPassword}@localhost:27017/FamilyPortal?authSource=admin`
+const uri = `mongodb://familyportal_root:${rootPassword}@localhost:27017/FamilyPortal?authSource=admin`
 
 async function updateAdmin() {
   const client = new MongoClient(uri)

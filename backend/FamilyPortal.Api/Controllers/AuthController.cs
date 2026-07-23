@@ -3,9 +3,12 @@ using FamilyPortal.Application.DTOs.Auth;
 using FamilyPortal.Application.Interfaces;
 using FamilyPortal.Domain.Entities;
 using FamilyPortal.Domain.Enums;
+using FamilyPortal.Infrastructure.Security;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Options;
 
 namespace FamilyPortal.Api.Controllers;
 
@@ -16,27 +19,51 @@ namespace FamilyPortal.Api.Controllers;
 [Route("api/[controller]")]
 public class AuthController : ControllerBase
 {
+    private const string AccessTokenCookieName = "family_access";
+    private const string RefreshTokenCookieName = "family_refresh";
     private readonly IUserRepository _userRepo;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ITokenService _tokenService;
     private readonly ILogger<AuthController> _logger;
+    private readonly IAntiforgery _antiforgery;
+    private readonly IWebHostEnvironment _environment;
+    private readonly JwtSettings _jwtSettings;
 
     public AuthController(
         IUserRepository userRepo,
         IPasswordHasher passwordHasher,
         ITokenService tokenService,
-        ILogger<AuthController> logger)
+        ILogger<AuthController> logger,
+        IAntiforgery antiforgery,
+        IWebHostEnvironment environment,
+        IOptions<JwtSettings> jwtSettings)
     {
         _userRepo = userRepo;
         _passwordHasher = passwordHasher;
         _tokenService = tokenService;
         _logger = logger;
+        _antiforgery = antiforgery;
+        _environment = environment;
+        _jwtSettings = jwtSettings.Value;
+    }
+
+    /// <summary>GET /api/auth/csrf — 建立 antiforgery cookie 並取得 request token。</summary>
+    [HttpGet("csrf")]
+    [AllowAnonymous]
+    public ActionResult<ApiResponse<CsrfTokenResponse>> GetCsrfToken()
+    {
+        var tokens = _antiforgery.GetAndStoreTokens(HttpContext);
+        return Ok(ApiResponse<CsrfTokenResponse>.Ok(new CsrfTokenResponse
+        {
+            Token = tokens.RequestToken ?? string.Empty
+        }));
     }
 
     /// <summary>
     /// POST /api/auth/login — 使用者登入
     /// </summary>
     [HttpPost("login")]
+    [AllowAnonymous]
     [EnableRateLimiting("login")]
     public async Task<ActionResult<ApiResponse<LoginResponse>>> Login([FromBody] LoginRequest request)
     {
@@ -61,15 +88,14 @@ public class AuthController : ControllerBase
         var refreshToken = _tokenService.GenerateRefreshToken();
 
         // 儲存 Refresh Token
-        await _userRepo.UpdateRefreshTokenAsync(user.Id, refreshToken);
+        await _userRepo.ReplaceRefreshTokensAsync(user.Id, [refreshToken.PersistedToken]);
+        WriteAuthCookies(accessToken, refreshToken.Token, refreshToken.PersistedToken.ExpiresAt);
 
         _logger.LogInformation("使用者 {Username} 登入成功", user.Username);
 
         var response = new LoginResponse
         {
-            AccessToken = accessToken,
-            RefreshToken = refreshToken.Token,
-            ExpiresAt = DateTime.UtcNow.AddMinutes(30),
+            ExpiresAt = DateTime.UtcNow.AddMinutes(_jwtSettings.AccessTokenExpirationMinutes),
             User = new UserInfo
             {
                 Id = user.Id,
@@ -88,11 +114,19 @@ public class AuthController : ControllerBase
     /// POST /api/auth/refresh — 更新 Access Token
     /// </summary>
     [HttpPost("refresh")]
-    public async Task<ActionResult<ApiResponse<LoginResponse>>> RefreshToken(
-        [FromBody] RefreshTokenRequest request)
+    [AllowAnonymous]
+    [EnableRateLimiting("refresh")]
+    public async Task<ActionResult<ApiResponse<LoginResponse>>> RefreshToken()
     {
+        if (!Request.Cookies.TryGetValue(AccessTokenCookieName, out var accessToken) ||
+            !Request.Cookies.TryGetValue(RefreshTokenCookieName, out var rawRefreshToken))
+        {
+            ClearAuthCookies();
+            return Unauthorized(ApiResponse<LoginResponse>.Fail("缺少登入憑證"));
+        }
+
         // 從過期的 Access Token 取得使用者 ID
-        var userId = _tokenService.GetUserIdFromExpiredToken(request.AccessToken);
+        var userId = _tokenService.GetUserIdFromExpiredToken(accessToken);
         if (userId == null)
         {
             return Unauthorized(ApiResponse<LoginResponse>.Fail("無效的 Access Token"));
@@ -104,32 +138,48 @@ public class AuthController : ControllerBase
             return Unauthorized(ApiResponse<LoginResponse>.Fail("使用者不存在或已停用"));
         }
 
-        // 驗證 Refresh Token
-        if (user.RefreshToken == null ||
-            user.RefreshToken.Token != request.RefreshToken ||
-            !user.RefreshToken.IsActive)
+        var refreshTokenHash = _tokenService.HashRefreshToken(rawRefreshToken);
+        var currentRefreshToken = user.RefreshTokens
+            .SingleOrDefault(token => token.TokenHash == refreshTokenHash);
+
+        if (currentRefreshToken == null)
         {
-            // 可能的 Token 被盜用，撤銷所有 Token
-            await _userRepo.UpdateRefreshTokenAsync(user.Id, null);
-            _logger.LogWarning("Refresh Token 驗證失敗，可能遭盜用。使用者 ID: {UserId}", userId);
+            ClearAuthCookies();
             return Unauthorized(ApiResponse<LoginResponse>.Fail("Refresh Token 無效或已過期"));
         }
 
-        // Token 輪替 (Rotation) — 舊 Token 標記為已使用，生成新 Token
+        if (!currentRefreshToken.IsActive)
+        {
+            if (currentRefreshToken.IsRevoked && currentRefreshToken.ReplacedByTokenHash != null)
+            {
+                await _userRepo.RevokeTokenFamilyAsync(user.Id, currentRefreshToken.FamilyId);
+                _logger.LogWarning("偵測到 Refresh Token 重放並撤銷 token family。使用者 ID: {UserId}", userId);
+            }
+
+            ClearAuthCookies();
+            return Unauthorized(ApiResponse<LoginResponse>.Fail("Refresh Token 無效或已過期"));
+        }
+
         var newAccessToken = _tokenService.GenerateAccessToken(user);
-        var newRefreshToken = _tokenService.GenerateRefreshToken();
+        var newRefreshToken = _tokenService.GenerateRefreshToken(currentRefreshToken.FamilyId);
+        var rotated = await _userRepo.RotateRefreshTokenAsync(
+            user.Id,
+            refreshTokenHash,
+            newRefreshToken.PersistedToken);
 
-        // 記錄舊 Token 被替換
-        user.RefreshToken.RevokedAt = DateTime.UtcNow;
-        user.RefreshToken.ReplacedByToken = newRefreshToken.Token;
+        if (!rotated)
+        {
+            await _userRepo.RevokeTokenFamilyAsync(user.Id, currentRefreshToken.FamilyId);
+            ClearAuthCookies();
+            _logger.LogWarning("Refresh Token 輪替競爭失敗並撤銷 token family。使用者 ID: {UserId}", userId);
+            return Unauthorized(ApiResponse<LoginResponse>.Fail("登入工作階段已失效"));
+        }
 
-        await _userRepo.UpdateRefreshTokenAsync(user.Id, newRefreshToken);
+        WriteAuthCookies(newAccessToken, newRefreshToken.Token, newRefreshToken.PersistedToken.ExpiresAt);
 
         var response = new LoginResponse
         {
-            AccessToken = newAccessToken,
-            RefreshToken = newRefreshToken.Token,
-            ExpiresAt = DateTime.UtcNow.AddMinutes(30),
+            ExpiresAt = DateTime.UtcNow.AddMinutes(_jwtSettings.AccessTokenExpirationMinutes),
             User = new UserInfo
             {
                 Id = user.Id,
@@ -157,7 +207,8 @@ public class AuthController : ControllerBase
             return Unauthorized(ApiResponse.Fail("未授權"));
         }
 
-        await _userRepo.UpdateRefreshTokenAsync(userId, null);
+        await _userRepo.RevokeAllRefreshTokensAsync(userId);
+        ClearAuthCookies();
         _logger.LogInformation("使用者 {UserId} 已登出", userId);
 
         return Ok(ApiResponse.Ok("登出成功"));
@@ -242,5 +293,44 @@ public class AuthController : ControllerBase
         };
 
         return Ok(ApiResponse<UserInfo>.Ok(userInfo));
+    }
+
+    private void WriteAuthCookies(string accessToken, string refreshToken, DateTime refreshExpiresAt)
+    {
+        var secure = _environment.IsProduction();
+        Response.Cookies.Append(AccessTokenCookieName, accessToken, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = secure,
+            SameSite = SameSiteMode.Strict,
+            Path = "/",
+            Expires = DateTimeOffset.UtcNow.AddMinutes(_jwtSettings.AccessTokenExpirationMinutes)
+        });
+        Response.Cookies.Append(RefreshTokenCookieName, refreshToken, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = secure,
+            SameSite = SameSiteMode.Strict,
+            Path = "/api/auth",
+            Expires = new DateTimeOffset(refreshExpiresAt, TimeSpan.Zero)
+        });
+    }
+
+    private void ClearAuthCookies()
+    {
+        Response.Cookies.Delete(AccessTokenCookieName, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = _environment.IsProduction(),
+            SameSite = SameSiteMode.Strict,
+            Path = "/"
+        });
+        Response.Cookies.Delete(RefreshTokenCookieName, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = _environment.IsProduction(),
+            SameSite = SameSiteMode.Strict,
+            Path = "/api/auth"
+        });
     }
 }

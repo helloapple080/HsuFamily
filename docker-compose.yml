@@ -5,18 +5,18 @@ services:
     container_name: family-portal-mongodb
     restart: unless-stopped
     environment:
-      MONGO_INITDB_ROOT_USERNAME: familyportal
+      MONGO_INITDB_ROOT_USERNAME: familyportal_root
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD is required}
       MONGO_INITDB_DATABASE: FamilyPortal
-    ports:
-      - "27017:27017"
+      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD:?MONGO_APP_PASSWORD is required}
     volumes:
       - mongodb_data:/data/db
       - mongodb_config:/data/configdb
+      - ./backend/scripts/mongo-init.js:/docker-entrypoint-initdb.d/10-create-app-user.js:ro
     networks:
       - family-portal-network
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD-SHELL", "mongosh --quiet --username familyportal_root --password '$$MONGO_INITDB_ROOT_PASSWORD' --authenticationDatabase admin --eval \"db.adminCommand('ping').ok\" | grep 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -32,7 +32,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:5001
-      MongoDbSettings__ConnectionString: mongodb://familyportal:${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD is required}@mongodb:27017
+      MongoDbSettings__ConnectionString: mongodb://familyportal_app:${MONGO_APP_PASSWORD:?MONGO_APP_PASSWORD is required}@mongodb:27017/FamilyPortal?authSource=FamilyPortal
       MongoDbSettings__DatabaseName: FamilyPortal
       JwtSettings__SecretKey: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
       JwtSettings__Issuer: FamilyPortal

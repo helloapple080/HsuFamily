@@ -3,4 +3,5 @@
   <Project Path="FamilyPortal.Application/FamilyPortal.Application.csproj" />
   <Project Path="FamilyPortal.Domain/FamilyPortal.Domain.csproj" />
   <Project Path="FamilyPortal.Infrastructure/FamilyPortal.Infrastructure.csproj" />
+  <Project Path="FamilyPortal.Security.Tests/FamilyPortal.Security.Tests.csproj" />
 </Solution>

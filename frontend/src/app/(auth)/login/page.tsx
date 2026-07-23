@@ -31,7 +31,7 @@ export default function LoginPage() {
       )
 
       if (data.success && data.data) {
-        login(data.data.user, data.data.accessToken, data.data.refreshToken)
+        login(data.data.user)
         toast.success('登入成功', { description: `歡迎回來，${data.data.user.displayName}` })
         router.push('/calendar')
       } else {
