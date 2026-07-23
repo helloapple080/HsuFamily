@@ -1,0 +1,38 @@
+# Family Portal — Root .gitignore
+
+# 環境變數（禁止提交！）
+.env
+.env.local
+.env.production
+
+# macOS
+.DS_Store
+._*
+.AppleDouble
+.LSOverride
+__MACOSX/
+
+# IDE
+.idea/
+.vscode/settings.json
+*.swp
+*.swo
+
+# ─── 後端 ───
+backend/bin/
+backend/obj/
+backend/**/.vs/
+backend/**/bin/
+backend/**/obj/
+backend/**/*.user
+backend/TestResults/
+
+# ─── 前端 ───
+**/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.turbo/
+frontend/coverage/
+
+# ─── Docker ───
+.env
