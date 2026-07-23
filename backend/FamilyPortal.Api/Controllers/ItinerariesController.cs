@@ -114,7 +114,7 @@ public class ItinerariesController : ControllerBase
         };
 
         await _itineraryRepo.CreateAsync(itinerary);
-        _logger.LogInformation("新增行程：{Title}", itinerary.Title);
+        _logger.LogInformation("新增行程：{ItineraryId}", itinerary.Id);
 
         return CreatedAtAction(
             nameof(GetById),
@@ -148,7 +148,7 @@ public class ItinerariesController : ControllerBase
         itinerary.LinkedEventId = request.LinkedEventId;
 
         await _itineraryRepo.UpdateAsync(id, itinerary);
-        _logger.LogInformation("更新行程：{Title}", itinerary.Title);
+        _logger.LogInformation("更新行程：{ItineraryId}", itinerary.Id);
 
         return Ok(ApiResponse<ItineraryResponse>.Ok(MapToResponse(itinerary), "行程更新成功"));
     }
@@ -167,7 +167,7 @@ public class ItinerariesController : ControllerBase
         }
 
         await _itineraryRepo.DeleteAsync(id);
-        _logger.LogInformation("刪除行程：{Title}", itinerary.Title);
+        _logger.LogInformation("刪除行程：{ItineraryId}", itinerary.Id);
 
         return Ok(ApiResponse.Ok("行程刪除成功"));
     }

@@ -36,7 +36,7 @@ dotnet watch --project FamilyPortal.Api
 ## 預設帳號
 啟動時自動建立（如不存在）：
 - 帳號：`admin`
-- 密碼：`Admin@123456`
+- 密碼：首次啟動前透過 `DefaultAdmin__Password` 環境變數或 User Secrets 設定
 - 角色：`Admin` (顯示名稱：許浴宸)
 - 安全性：啟動時自動於 `Users` 集合建立 (若不存在)
 

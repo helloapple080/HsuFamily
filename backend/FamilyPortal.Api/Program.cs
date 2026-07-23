@@ -11,9 +11,33 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.IdentityModel.Tokens;
+using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var secureCookies = builder.Configuration.GetValue("SecuritySettings:CookieSecure", true);
+var dataProtectionKeysPath = builder.Configuration["DataProtection:KeysPath"];
+var dataProtection = builder.Services.AddDataProtection().SetApplicationName("FamilyPortal");
+if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
+{
+    dataProtection.PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath));
+}
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    foreach (var value in builder.Configuration.GetSection("ProxySettings:KnownProxies").Get<string[]>() ?? [])
+    {
+        if (!IPAddress.TryParse(value, out var address))
+        {
+            throw new InvalidOperationException($"ProxySettings:KnownProxies 包含無效 IP：{value}");
+        }
+        options.KnownProxies.Add(address);
+    }
+});
 
 // ─────────────────────────────────────────────
 // 1. 基礎設施服務註冊 (Infrastructure DI)
@@ -96,9 +120,7 @@ builder.Services.AddAntiforgery(options =>
     options.Cookie.Name = "family_antiforgery";
     options.Cookie.HttpOnly = true;
     options.Cookie.SameSite = SameSiteMode.Strict;
-    options.Cookie.SecurePolicy = builder.Environment.IsProduction()
-        ? CookieSecurePolicy.Always
-        : CookieSecurePolicy.SameAsRequest;
+    options.Cookie.SecurePolicy = secureCookies ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest;
 });
 
 builder.Services.AddControllers(options =>
@@ -213,6 +235,7 @@ var app = builder.Build();
 // Middleware Pipeline 順序（順序很重要！）
 // ─────────────────────────────────────────────
 app.UseMiddleware<ExceptionMiddleware>();
+app.UseForwardedHeaders();
 
 // 開發環境配置
 if (app.Environment.IsDevelopment())
@@ -243,11 +266,16 @@ app.MapControllers().RequireRateLimiting("fixed");
 app.MapHub<CalendarHub>(CalendarHub.HubUrl)
     .RequireAuthorization()
     .RequireRateLimiting("fixed");
-app.MapHealthChecks("/health").AllowAnonymous();
+app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = _ => false
+}).AllowAnonymous();
+app.MapHealthChecks("/health/ready").AllowAnonymous();
 
 // ─────────────────────────────────────────────
 // 應用程式啟動初始化
 // ─────────────────────────────────────────────
+if (!app.Environment.IsEnvironment("Testing"))
 using (var scope = app.Services.CreateScope())
 {
     // 建立 MongoDB 索引
@@ -268,14 +296,7 @@ using (var scope = app.Services.CreateScope())
 
         if (string.IsNullOrWhiteSpace(defaultAdminPassword))
         {
-            if (app.Environment.IsDevelopment())
-            {
-                defaultAdminPassword = "Admin@123456";
-            }
-            else
-            {
-                throw new InvalidOperationException("Production 環境必須設定 DefaultAdmin:Password。");
-            }
+            throw new InvalidOperationException("首次啟動前必須透過環境變數或 User Secrets 設定 DefaultAdmin:Password。");
         }
 
         var admin = new FamilyPortal.Domain.Entities.User
@@ -288,9 +309,11 @@ using (var scope = app.Services.CreateScope())
             IsActive = true
         };
         await userRepo.CreateAsync(admin);
-        app.Logger.LogInformation("已建立預設管理員帳號：{Username}", defaultAdminUsername);
+        app.Logger.LogInformation("已建立預設管理員帳號：{UserId}", admin.Id);
     }
 }
 
 app.Logger.LogInformation("🏠 Family Portal API 啟動成功！");
 app.Run();
+
+public partial class Program;

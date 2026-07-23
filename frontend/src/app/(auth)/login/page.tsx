@@ -156,7 +156,7 @@ export default function LoginPage() {
               transition={{ delay: 0.8 }}
               className="text-center text-xs text-[var(--muted-foreground)] mt-6"
             >
-              預設帳號：admin / Admin@123456
+              請使用管理員提供的帳號密碼登入
             </motion.p>
           </CardContent>
         </Card>

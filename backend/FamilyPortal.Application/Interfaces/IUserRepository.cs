@@ -13,6 +13,9 @@ public interface IUserRepository : IRepository<User>
     /// <summary>根據電子信箱取得使用者</summary>
     Task<User?> GetByEmailAsync(string email);
 
+    /// <summary>根據 Refresh Token 雜湊取得所屬使用者。</summary>
+    Task<User?> GetByRefreshTokenHashAsync(string tokenHash);
+
     /// <summary>以新的 Token family 取代既有登入工作階段。</summary>
     Task ReplaceRefreshTokensAsync(
         string userId,

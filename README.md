@@ -77,7 +77,7 @@ family-portal/
 cd backend
 dotnet run --project FamilyPortal.Api
 # API 啟動於 https://localhost:5001
-# 預設管理員帳號：admin / Admin@123456 (顯示名稱：許浴宸)
+# 首次啟動須以環境變數設定管理員帳號與高強度密碼
 ```
 
 ### 啟動前端

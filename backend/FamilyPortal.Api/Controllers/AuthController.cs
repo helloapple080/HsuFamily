@@ -26,8 +26,8 @@ public class AuthController : ControllerBase
     private readonly ITokenService _tokenService;
     private readonly ILogger<AuthController> _logger;
     private readonly IAntiforgery _antiforgery;
-    private readonly IWebHostEnvironment _environment;
     private readonly JwtSettings _jwtSettings;
+    private readonly bool _secureCookies;
 
     public AuthController(
         IUserRepository userRepo,
@@ -35,16 +35,16 @@ public class AuthController : ControllerBase
         ITokenService tokenService,
         ILogger<AuthController> logger,
         IAntiforgery antiforgery,
-        IWebHostEnvironment environment,
-        IOptions<JwtSettings> jwtSettings)
+        IOptions<JwtSettings> jwtSettings,
+        IConfiguration configuration)
     {
         _userRepo = userRepo;
         _passwordHasher = passwordHasher;
         _tokenService = tokenService;
         _logger = logger;
         _antiforgery = antiforgery;
-        _environment = environment;
         _jwtSettings = jwtSettings.Value;
+        _secureCookies = configuration.GetValue("SecuritySettings:CookieSecure", true);
     }
 
     /// <summary>GET /api/auth/csrf — 建立 antiforgery cookie 並取得 request token。</summary>
@@ -73,13 +73,13 @@ public class AuthController : ControllerBase
 
         if (user == null || !user.IsActive)
         {
-            _logger.LogWarning("登入失敗：帳號 {Username} 不存在或已停用", request.Username);
+            _logger.LogWarning("登入失敗：帳號不存在或已停用，來源 IP：{RemoteIp}", HttpContext.Connection.RemoteIpAddress);
             return Unauthorized(ApiResponse<LoginResponse>.Fail("帳號或密碼錯誤"));
         }
 
         if (!_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
         {
-            _logger.LogWarning("登入失敗：帳號 {Username} 密碼錯誤", request.Username);
+            _logger.LogWarning("登入失敗：密碼錯誤，來源 IP：{RemoteIp}", HttpContext.Connection.RemoteIpAddress);
             return Unauthorized(ApiResponse<LoginResponse>.Fail("帳號或密碼錯誤"));
         }
 
@@ -91,7 +91,7 @@ public class AuthController : ControllerBase
         await _userRepo.ReplaceRefreshTokensAsync(user.Id, [refreshToken.PersistedToken]);
         WriteAuthCookies(accessToken, refreshToken.Token, refreshToken.PersistedToken.ExpiresAt);
 
-        _logger.LogInformation("使用者 {Username} 登入成功", user.Username);
+        _logger.LogInformation("使用者 {UserId} 登入成功", user.Id);
 
         var response = new LoginResponse
         {
@@ -118,27 +118,20 @@ public class AuthController : ControllerBase
     [EnableRateLimiting("refresh")]
     public async Task<ActionResult<ApiResponse<LoginResponse>>> RefreshToken()
     {
-        if (!Request.Cookies.TryGetValue(AccessTokenCookieName, out var accessToken) ||
-            !Request.Cookies.TryGetValue(RefreshTokenCookieName, out var rawRefreshToken))
+        if (!Request.Cookies.TryGetValue(RefreshTokenCookieName, out var rawRefreshToken))
         {
             ClearAuthCookies();
             return Unauthorized(ApiResponse<LoginResponse>.Fail("缺少登入憑證"));
         }
 
-        // 從過期的 Access Token 取得使用者 ID
-        var userId = _tokenService.GetUserIdFromExpiredToken(accessToken);
-        if (userId == null)
-        {
-            return Unauthorized(ApiResponse<LoginResponse>.Fail("無效的 Access Token"));
-        }
-
-        var user = await _userRepo.GetByIdAsync(userId);
+        // Access Cookie 過期後瀏覽器會移除，因此以不可逆雜湊查找 Refresh Token 所屬使用者。
+        var refreshTokenHash = _tokenService.HashRefreshToken(rawRefreshToken);
+        var user = await _userRepo.GetByRefreshTokenHashAsync(refreshTokenHash);
         if (user == null || !user.IsActive)
         {
             return Unauthorized(ApiResponse<LoginResponse>.Fail("使用者不存在或已停用"));
         }
 
-        var refreshTokenHash = _tokenService.HashRefreshToken(rawRefreshToken);
         var currentRefreshToken = user.RefreshTokens
             .SingleOrDefault(token => token.TokenHash == refreshTokenHash);
 
@@ -153,7 +146,7 @@ public class AuthController : ControllerBase
             if (currentRefreshToken.IsRevoked && currentRefreshToken.ReplacedByTokenHash != null)
             {
                 await _userRepo.RevokeTokenFamilyAsync(user.Id, currentRefreshToken.FamilyId);
-                _logger.LogWarning("偵測到 Refresh Token 重放並撤銷 token family。使用者 ID: {UserId}", userId);
+                _logger.LogWarning("偵測到 Refresh Token 重放並撤銷 token family。使用者 ID: {UserId}", user.Id);
             }
 
             ClearAuthCookies();
@@ -171,7 +164,7 @@ public class AuthController : ControllerBase
         {
             await _userRepo.RevokeTokenFamilyAsync(user.Id, currentRefreshToken.FamilyId);
             ClearAuthCookies();
-            _logger.LogWarning("Refresh Token 輪替競爭失敗並撤銷 token family。使用者 ID: {UserId}", userId);
+            _logger.LogWarning("Refresh Token 輪替競爭失敗並撤銷 token family。使用者 ID: {UserId}", user.Id);
             return Unauthorized(ApiResponse<LoginResponse>.Fail("登入工作階段已失效"));
         }
 
@@ -249,7 +242,7 @@ public class AuthController : ControllerBase
         };
 
         await _userRepo.CreateAsync(user);
-        _logger.LogInformation("Admin 建立了新帳號：{Username}", user.Username);
+        _logger.LogInformation("Admin 建立了新帳號：{UserId}", user.Id);
 
         var userInfo = new UserInfo
         {
@@ -297,11 +290,10 @@ public class AuthController : ControllerBase
 
     private void WriteAuthCookies(string accessToken, string refreshToken, DateTime refreshExpiresAt)
     {
-        var secure = _environment.IsProduction();
         Response.Cookies.Append(AccessTokenCookieName, accessToken, new CookieOptions
         {
             HttpOnly = true,
-            Secure = secure,
+            Secure = _secureCookies,
             SameSite = SameSiteMode.Strict,
             Path = "/",
             Expires = DateTimeOffset.UtcNow.AddMinutes(_jwtSettings.AccessTokenExpirationMinutes)
@@ -309,7 +301,7 @@ public class AuthController : ControllerBase
         Response.Cookies.Append(RefreshTokenCookieName, refreshToken, new CookieOptions
         {
             HttpOnly = true,
-            Secure = secure,
+            Secure = _secureCookies,
             SameSite = SameSiteMode.Strict,
             Path = "/api/auth",
             Expires = new DateTimeOffset(refreshExpiresAt, TimeSpan.Zero)
@@ -321,14 +313,14 @@ public class AuthController : ControllerBase
         Response.Cookies.Delete(AccessTokenCookieName, new CookieOptions
         {
             HttpOnly = true,
-            Secure = _environment.IsProduction(),
+            Secure = _secureCookies,
             SameSite = SameSiteMode.Strict,
             Path = "/"
         });
         Response.Cookies.Delete(RefreshTokenCookieName, new CookieOptions
         {
             HttpOnly = true,
-            Secure = _environment.IsProduction(),
+            Secure = _secureCookies,
             SameSite = SameSiteMode.Strict,
             Path = "/api/auth"
         });

@@ -122,7 +122,7 @@ public class EventsController : ControllerBase
         };
 
         await _eventRepo.CreateAsync(evt);
-        _logger.LogInformation("新增事件：{Title}", evt.Title);
+        _logger.LogInformation("新增事件：{EventId}", evt.Id);
 
         // 🔔 SignalR 即時推播 — 通知所有在線用戶
         await _calendarHub.Clients.Group("FamilyCalendar")
@@ -168,7 +168,7 @@ public class EventsController : ControllerBase
         evt.Color = request.Color;
 
         await _eventRepo.UpdateAsync(id, evt);
-        _logger.LogInformation("更新事件：{Title}", evt.Title);
+        _logger.LogInformation("更新事件：{EventId}", evt.Id);
 
         // 🔔 SignalR 即時推播
         await _calendarHub.Clients.Group("FamilyCalendar")
@@ -191,7 +191,7 @@ public class EventsController : ControllerBase
         }
 
         await _eventRepo.DeleteAsync(id);
-        _logger.LogInformation("刪除事件：{Title}", evt.Title);
+        _logger.LogInformation("刪除事件：{EventId}", evt.Id);
 
         // 🔔 SignalR 即時推播
         await _calendarHub.Clients.Group("FamilyCalendar")

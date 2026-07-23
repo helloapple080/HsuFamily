@@ -75,7 +75,7 @@ public class MembersController : ControllerBase
         };
 
         await _memberRepo.CreateAsync(member);
-        _logger.LogInformation("新增家庭成員：{Name}", member.Name);
+        _logger.LogInformation("新增家庭成員：{MemberId}", member.Id);
 
         return CreatedAtAction(
             nameof(GetById),
@@ -109,7 +109,7 @@ public class MembersController : ControllerBase
         member.IsActive = request.IsActive;
 
         await _memberRepo.UpdateAsync(id, member);
-        _logger.LogInformation("更新家庭成員：{Name}", member.Name);
+        _logger.LogInformation("更新家庭成員：{MemberId}", member.Id);
 
         return Ok(ApiResponse<MemberResponse>.Ok(MapToResponse(member), "成員更新成功"));
     }
@@ -128,7 +128,7 @@ public class MembersController : ControllerBase
         }
 
         await _memberRepo.DeleteAsync(id);
-        _logger.LogInformation("刪除家庭成員：{Name}", member.Name);
+        _logger.LogInformation("刪除家庭成員：{MemberId}", member.Id);
 
         return Ok(ApiResponse.Ok("成員刪除成功"));
     }

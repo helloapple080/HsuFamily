@@ -2,7 +2,7 @@
 
 ## 摘要
 
-本次已處理先前列為 Critical／High 的可直接修正項目：瀏覽器 Token 儲存、Refresh Token 明文、Token 重放偵測、Cookie CSRF、SignalR 未授權存取、MongoDB 對外暴露與過大資料庫權限，以及缺少安全測試。前端已通過 TypeScript、ESLint 與 production build；後端因本機沒有 .NET SDK，改由 GitHub Actions 執行 .NET 10 build 與測試。
+本次已處理先前列為 Critical／High 及可由程式碼消除的中等風險，包括 Access Cookie 過期後無法 refresh、多分頁輪替競態、固定開發密碼、代理來源信任、Data Protection 金鑰持久化、容器 root、錯誤資訊洩漏、敏感日誌、Next.js 安全標頭、浮動套件版本與既有 MongoDB volume 遷移。前端已通過 TypeScript、ESLint 與 production build；後端由 GitHub Actions 執行 .NET 10 build 與測試。
 
 ## 已解決項目
 
@@ -54,9 +54,20 @@
 - 證據：`backend/FamilyPortal.Security.Tests/`、`.github/workflows/ci.yml:23`。
 - 狀態：已解決基礎安全測試；完整登入 E2E 仍應在可啟動 MongoDB／API 的環境補上。
 
-## 尚待處理的中等風險
+## 追加改善（2026-07-23）
 
-- 將 AuthController 的登入與 token rotation 業務邏輯移至 Application Service，以完全符合專案 Clean Architecture。
-- 在 Next.js response headers 或正式 edge proxy 設置完整 CSP。
-- 正式部署時配置 TLS termination、forwarded headers 與可觀測性。
-- 為 Controller＋MongoDB 增加整合測試，並以 Playwright 驗證真實登入、refresh、logout 流程。
+- Refresh 僅以雜湊後的 Refresh Token 查找使用者，不再要求瀏覽器已刪除的過期 Access Cookie。
+- Web Locks 將跨分頁 refresh 序列化；等待者先驗證共享 Cookie，避免將正常競態誤判成重放攻擊。
+- Cookie `Secure` 改成明確設定；正式環境預設安全，Docker 本機 HTTP 必須明確選擇非安全模式。
+- 僅接受明列 `KnownProxies` 的 forwarded headers；Data Protection keys 使用具名 volume 保存。
+- Backend 以非 root 使用者執行；Docker 與 IdentityModel 版本固定。
+- Mongo app user 每次部署冪等建立／更新，既有 volume 不再漏掉首次初始化腳本。
+- Next.js 加入 CSP、Permissions Policy、COOP、frame／MIME／referrer 防護。
+- 新增 API 整合測試，確認匿名健康檢查、不帶 Cookie 的授權拒絕及 CSRF 拒絕。
+
+## 部署端仍須完成的責任
+
+- 對外環境必須由 TLS reverse proxy 提供 HTTPS，設定 `COOKIE_SECURE=true`、實際 `ALLOWED_HOSTS`、`AllowedOrigins` 與代理 IP；缺少實際網域／代理拓撲，程式碼無法代替此設定。
+- 密碼與 JWT secret 必須由 secret manager 或環境變數注入並定期輪替，不得提交到 Git。
+- CSP 為相容 Next.js hydration 暫時允許 inline script/style；若要達到更嚴格政策，部署層應導入逐請求 nonce。
+- 真實瀏覽器登入 E2E 需要可啟動的 MongoDB、API 與測試帳號；目前 CI 先覆蓋 API 安全邊界與 production build。

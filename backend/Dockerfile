@@ -1,5 +1,5 @@
 # 後端 Dockerfile — .NET 10 Multi-stage Build
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.302 AS build
 WORKDIR /src
 
 COPY ["FamilyPortal.Api/FamilyPortal.Api.csproj", "FamilyPortal.Api/"]
@@ -12,7 +12,7 @@ RUN dotnet restore "FamilyPortal.Api/FamilyPortal.Api.csproj"
 COPY . .
 RUN dotnet publish "FamilyPortal.Api/FamilyPortal.Api.csproj" -c Release -o /app/publish
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.9 AS runtime
 WORKDIR /app
 EXPOSE 5001
 
@@ -21,5 +21,8 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /app/publish .
+
+RUN mkdir -p /app/keys && chown -R app:app /app
+USER app
 
 ENTRYPOINT ["dotnet", "FamilyPortal.Api.dll"]

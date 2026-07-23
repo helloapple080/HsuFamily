@@ -23,8 +23,8 @@ public class ExceptionMiddleware
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "未處理的例外: {Message} on {Method} {Path}", 
-                ex.Message, context.Request.Method, context.Request.Path);
+            _logger.LogError(ex, "未處理的例外，追蹤碼 {TraceId}，請求 {Method} {Path}",
+                context.TraceIdentifier, context.Request.Method, context.Request.Path);
             await HandleExceptionAsync(context, ex);
         }
     }
@@ -36,7 +36,7 @@ public class ExceptionMiddleware
         var (statusCode, message) = ex switch
         {
             ArgumentException or InvalidOperationException =>
-                ((int)HttpStatusCode.BadRequest, ex.Message),
+                ((int)HttpStatusCode.BadRequest, "請求內容或目前操作狀態無效"),
             UnauthorizedAccessException =>
                 ((int)HttpStatusCode.Unauthorized, "未授權的存取"),
             KeyNotFoundException =>
@@ -47,7 +47,7 @@ public class ExceptionMiddleware
 
         context.Response.StatusCode = statusCode;
 
-        var response = ApiResponse<object>.Fail(message);
+        var response = ApiResponse<object>.Fail(message, [$"追蹤碼：{context.TraceIdentifier}"]);
         var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
         
         await context.Response.WriteAsJsonAsync(response, options);

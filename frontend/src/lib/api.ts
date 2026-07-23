@@ -51,6 +51,26 @@ async function refreshSession(): Promise<void> {
   })
 }
 
+async function refreshSessionAcrossTabs(): Promise<void> {
+  if (typeof navigator === 'undefined' || !navigator.locks) {
+    await refreshSession()
+    return
+  }
+
+  await navigator.locks.request('family-portal-session-refresh', async () => {
+    // 其他分頁可能已在等待期間完成輪替；先用共享 Cookie 驗證，避免重放舊 Refresh Token。
+    try {
+      await sessionClient.get('/api/auth/me')
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        await refreshSession()
+        return
+      }
+      throw error
+    }
+  })
+}
+
 /// Axios API Client — 憑證只透過 HttpOnly Cookie 傳送。
 const api = axios.create({
   baseURL: apiBaseUrl,
@@ -77,7 +97,7 @@ api.interceptors.response.use(
       originalRequest._retry = true
 
       try {
-        refreshRequest ??= refreshSession().finally(() => {
+        refreshRequest ??= refreshSessionAcrossTabs().finally(() => {
           refreshRequest = null
         })
         await refreshRequest

@@ -26,6 +26,16 @@ public class UserRepository : MongoRepository<User>, IUserRepository
     }
 
     /// <inheritdoc />
+    public async Task<User?> GetByRefreshTokenHashAsync(string tokenHash)
+    {
+        return await _collection.Find(
+            Builders<User>.Filter.ElemMatch(
+                user => user.RefreshTokens,
+                token => token.TokenHash == tokenHash))
+            .FirstOrDefaultAsync();
+    }
+
+    /// <inheritdoc />
     public async Task ReplaceRefreshTokensAsync(
         string userId,
         IReadOnlyCollection<RefreshToken> refreshTokens)
