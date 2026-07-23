@@ -24,16 +24,16 @@ public sealed class ApiSecurityIntegrationTests : IClassFixture<ApiSecurityInteg
     [Fact]
     public async Task LiveHealthCheck_IsAnonymousAndDoesNotExposeDependencies()
     {
-        var response = await _client.GetAsync("/health/live");
+        var response = await _client.GetAsync("/health/live", TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("Healthy", await response.Content.ReadAsStringAsync());
+        Assert.Equal("Healthy", await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
     public async Task ProtectedEndpoint_WithoutCookie_ReturnsUnauthorized()
     {
-        var response = await _client.GetAsync("/api/auth/me");
+        var response = await _client.GetAsync("/api/auth/me", TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -45,7 +45,7 @@ public sealed class ApiSecurityIntegrationTests : IClassFixture<ApiSecurityInteg
         {
             Username = "someone",
             Password = "ValidPassword!123"
-        });
+        }, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
