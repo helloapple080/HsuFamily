@@ -4,6 +4,7 @@ using FamilyPortal.Application.DTOs.Auth;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
+using Xunit;
 
 namespace FamilyPortal.Security.Tests;
 
