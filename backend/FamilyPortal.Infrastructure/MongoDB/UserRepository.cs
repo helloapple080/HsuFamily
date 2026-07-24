@@ -16,6 +16,35 @@ public class UserRepository : MongoRepository<User>, IUserRepository
     public UserRepository(MongoDbContext context) : base(context, "Users") { }
 
     /// <inheritdoc />
+    public async Task<bool> TryCreateAsync(
+        User entity,
+        CancellationToken cancellationToken = default)
+    {
+        entity.CreatedAt = DateTime.UtcNow;
+        entity.UpdatedAt = DateTime.UtcNow;
+
+        return await ExecuteDuplicateSafeInsertAsync(
+            token => _collection.InsertOneAsync(entity, cancellationToken: token),
+            cancellationToken);
+    }
+
+    private static async Task<bool> ExecuteDuplicateSafeInsertAsync(
+        Func<CancellationToken, Task> insert,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await insert(cancellationToken);
+            return true;
+        }
+        catch (MongoWriteException exception)
+            when (exception.WriteError?.Category == ServerErrorCategory.DuplicateKey)
+        {
+            return false;
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<User?> GetByUsernameAsync(
         string username,
         CancellationToken cancellationToken = default)

@@ -7,6 +7,9 @@ namespace FamilyPortal.Application.Interfaces;
 /// </summary>
 public interface IUserRepository : IRepository<User>
 {
+    /// <summary>建立使用者；唯一鍵已存在時回傳 false，其餘錯誤照常向上傳遞。</summary>
+    Task<bool> TryCreateAsync(User user, CancellationToken cancellationToken = default);
+
     /// <summary>根據使用者名稱取得使用者</summary>
     Task<User?> GetByUsernameAsync(string username, CancellationToken cancellationToken = default);
 

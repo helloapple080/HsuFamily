@@ -284,6 +284,14 @@ public sealed class AuthServiceTests
         public CancellationToken LastCancellationToken { get; private set; }
 
         /// <inheritdoc />
+        public Task<bool> TryCreateAsync(User user, CancellationToken cancellationToken = default)
+        {
+            Created = user;
+            LastCancellationToken = cancellationToken;
+            return Task.FromResult(true);
+        }
+
+        /// <inheritdoc />
         public Task<User?> GetByUsernameAsync(string username, CancellationToken cancellationToken = default)
         {
             UsernameLookupCalls++;
