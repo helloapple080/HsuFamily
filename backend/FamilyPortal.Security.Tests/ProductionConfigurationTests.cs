@@ -71,6 +71,7 @@ public sealed class ProductionConfigurationTests
     [InlineData("https://family.example#section")]
     [InlineData(" https://family.example")]
     [InlineData("https://family.example ")]
+    [InlineData("https://family.example/")]
     public void ValidateProduction_RejectsHttpsValuesThatAreNotPureOrigins(string origin)
     {
         var configuration = new ConfigurationBuilder()
@@ -116,7 +117,7 @@ public sealed class ProductionConfigurationTests
 
     /// <summary>非正式環境不應套用正式環境安全限制。</summary>
     [Theory]
-    [InlineData(Environments.Development)]
+    [InlineData("Development")]
     [InlineData("Testing")]
     public void ValidateProduction_NonProductionEnvironment_BypassesValidation(string environmentName)
     {
@@ -148,11 +149,10 @@ public sealed class ProductionConfigurationTests
             ProductionSecurityOptions.Validate(configuration, Environments.Production));
     }
 
-    /// <summary>合法的 IPv6、port 與根路徑 HTTPS origin 應通過驗證。</summary>
+    /// <summary>合法的 IPv6 與含 port HTTPS origin 應通過驗證。</summary>
     [Theory]
     [InlineData("https://[2001:db8::1]")]
     [InlineData("https://family.example:8443")]
-    [InlineData("https://family.example/")]
     public void ValidateProduction_AcceptsValidOriginVariants(string origin)
     {
         var configuration = new ConfigurationBuilder()

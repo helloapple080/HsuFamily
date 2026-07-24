@@ -43,6 +43,7 @@ public static class ProductionSecurityOptions
                string.IsNullOrEmpty(uri.UserInfo) &&
                string.IsNullOrEmpty(uri.Query) &&
                string.IsNullOrEmpty(uri.Fragment) &&
-               (string.IsNullOrEmpty(uri.AbsolutePath) || uri.AbsolutePath == "/");
+               uri.AbsolutePath == "/" &&
+               !origin.EndsWith("/", StringComparison.Ordinal);
     }
 }
