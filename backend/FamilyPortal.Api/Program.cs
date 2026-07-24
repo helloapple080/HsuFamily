@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using FamilyPortal.Application.DTOs;
+using FamilyPortal.Api.Configuration;
 using FamilyPortal.Api.Middleware;
 using FamilyPortal.Infrastructure;
 using FamilyPortal.Infrastructure.Hubs;
@@ -17,6 +18,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
+ProductionSecurityOptions.Validate(builder.Configuration, builder.Environment.EnvironmentName);
 
 var secureCookies = builder.Configuration.GetValue("SecuritySettings:CookieSecure", true);
 var dataProtectionKeysPath = builder.Configuration["DataProtection:KeysPath"];
