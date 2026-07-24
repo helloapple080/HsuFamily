@@ -6,6 +6,7 @@ using FamilyPortal.Application.Interfaces;
 using FamilyPortal.Application.Services;
 using FamilyPortal.Domain.Entities;
 using Xunit;
+using LunarDate = FamilyPortal.Domain.ValueObjects.LunarDate;
 
 namespace FamilyPortal.Security.Tests.Application;
 
@@ -69,6 +70,71 @@ public sealed class MemberServiceTests
         Assert.True(result.IsSuccess);
         Assert.Equal(ValidationLimits.MaxPageSize, repository.LastLimit);
         Assert.Equal(source.Token, repository.LastCancellationToken);
+    }
+
+    /// <summary>讀取成員時必須忽略資料庫中的偽造文字並重建標準農曆顯示。</summary>
+    [Fact]
+    public async Task GetByIdAsync_RebuildsStoredLunarDisplayText()
+    {
+        var repository = new FakeMemberRepository
+        {
+            Stored = new Member
+            {
+                Id = "member-1",
+                Name = "許小明",
+                Title = "家人",
+                LunarBirthday = new LunarDate
+                {
+                    Year = 2026,
+                    Month = 1,
+                    Day = 1,
+                    DisplayText = "<script>不可信內容</script>"
+                }
+            }
+        };
+        var service = new MemberService(repository);
+
+        var result = await service.GetByIdAsync("member-1", CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("農曆正月初一", result.Value!.LunarBirthday!.DisplayText);
+        Assert.NotSame(repository.Stored.LunarBirthday, result.Value.LunarBirthday);
+    }
+
+    /// <summary>讀取無效歷史月日時不可拋出例外或轉送資料庫中的顯示文字。</summary>
+    [Theory]
+    [InlineData(0, 1)]
+    [InlineData(13, 1)]
+    [InlineData(1, 0)]
+    [InlineData(1, 31)]
+    public async Task GetByIdAsync_InvalidLegacyLunarDateUsesDeterministicFallback(
+        int month,
+        int day)
+    {
+        var repository = new FakeMemberRepository
+        {
+            Stored = new Member
+            {
+                Id = "member-1",
+                Name = "許小明",
+                Title = "家人",
+                LunarBirthday = new LunarDate
+                {
+                    Year = 2026,
+                    Month = month,
+                    Day = day,
+                    DisplayText = "不應轉送"
+                }
+            }
+        };
+        var service = new MemberService(repository);
+
+        var result = await service.GetByIdAsync("member-1", CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(month, result.Value!.LunarBirthday!.Month);
+        Assert.Equal(day, result.Value.LunarBirthday.Day);
+        Assert.Equal("農曆日期無效", result.Value.LunarBirthday.DisplayText);
     }
 
     /// <summary>更新不存在的成員時不可寫入資料。</summary>

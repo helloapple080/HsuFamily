@@ -130,7 +130,7 @@ public sealed class MemberService(IMemberRepository memberRepository) : IMemberS
         Name = member.Name,
         Title = member.Title,
         Birthday = member.Birthday,
-        LunarBirthday = member.LunarBirthday,
+        LunarBirthday = MapLunarDateResponse(member.LunarBirthday),
         AvatarUrl = member.AvatarUrl,
         Bio = member.Bio,
         ContactInfo = member.ContactInfo,
@@ -138,6 +138,23 @@ public sealed class MemberService(IMemberRepository memberRepository) : IMemberS
         SortOrder = member.SortOrder,
         IsActive = member.IsActive
     };
+
+    private static LunarDate? MapLunarDateResponse(LunarDate? lunarDate) =>
+        lunarDate is null
+            ? null
+            : new LunarDate
+            {
+                Year = lunarDate.Year,
+                Month = lunarDate.Month,
+                Day = lunarDate.Day,
+                IsLeapMonth = lunarDate.IsLeapMonth,
+                DisplayText = IsValidLunarDate(lunarDate.Month, lunarDate.Day)
+                    ? FormatLunarDate(lunarDate.Month, lunarDate.Day, lunarDate.IsLeapMonth)
+                    : "農曆日期無效"
+            };
+
+    private static bool IsValidLunarDate(int month, int day) =>
+        month is >= 1 and <= 12 && day is >= 1 and <= 30;
 
     private static string FormatLunarDate(int month, int day, bool isLeapMonth) =>
         $"農曆{(isLeapMonth ? "閏" : string.Empty)}{LunarMonths[month - 1]}月{LunarDays[day - 1]}";

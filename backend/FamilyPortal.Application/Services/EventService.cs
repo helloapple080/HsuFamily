@@ -21,6 +21,7 @@ public sealed class EventService(
         var events = await eventRepository.GetByDateRangeAsync(
             NormalizeUtc(request.Start),
             NormalizeUtc(request.End),
+            ValidationLimits.MaxPageSize,
             cancellationToken);
 
         return ServiceResult<IReadOnlyList<EventResponse>>.Success(
@@ -51,7 +52,10 @@ public sealed class EventService(
                 "無效的事件類型");
         }
 
-        var events = await eventRepository.GetByEventTypeAsync(parsedType, cancellationToken);
+        var events = await eventRepository.GetByEventTypeAsync(
+            parsedType,
+            ValidationLimits.MaxPageSize,
+            cancellationToken);
         return ServiceResult<IReadOnlyList<EventResponse>>.Success(
             events.Select(MapToResponse).ToList());
     }
@@ -69,7 +73,11 @@ public sealed class EventService(
                 "無效的農曆日期");
         }
 
-        var events = await eventRepository.GetByLunarDateAsync(month, day, cancellationToken);
+        var events = await eventRepository.GetByLunarDateAsync(
+            month,
+            day,
+            ValidationLimits.MaxPageSize,
+            cancellationToken);
         return ServiceResult<IReadOnlyList<EventResponse>>.Success(
             events.Select(MapToResponse).ToList());
     }
@@ -219,7 +227,7 @@ public sealed class EventService(
         EndDate = evt.EndDate,
         IsAllDay = evt.IsAllDay,
         IsLunarDate = evt.IsLunarDate,
-        LunarDate = evt.LunarDate,
+        LunarDate = MapLunarDateResponse(evt.LunarDate),
         RecurrenceRule = evt.RecurrenceRule,
         WorshipDetails = evt.WorshipDetails,
         RelatedMemberIds = [.. evt.RelatedMemberIds],
@@ -231,6 +239,23 @@ public sealed class EventService(
     };
 
     private static DateTime NormalizeUtc(DateTime value) => value.ToUniversalTime();
+
+    private static LunarDate? MapLunarDateResponse(LunarDate? lunarDate) =>
+        lunarDate is null
+            ? null
+            : new LunarDate
+            {
+                Year = lunarDate.Year,
+                Month = lunarDate.Month,
+                Day = lunarDate.Day,
+                IsLeapMonth = lunarDate.IsLeapMonth,
+                DisplayText = IsValidLunarDate(lunarDate.Month, lunarDate.Day)
+                    ? FormatLunarDate(lunarDate.Month, lunarDate.Day, lunarDate.IsLeapMonth)
+                    : "農曆日期無效"
+            };
+
+    private static bool IsValidLunarDate(int month, int day) =>
+        month is >= 1 and <= 12 && day is >= 1 and <= 30;
 
     private static string FormatLunarDate(int month, int day, bool isLeapMonth)
     {

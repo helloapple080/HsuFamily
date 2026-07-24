@@ -527,6 +527,26 @@ public sealed class ValidationBoundaryTests
         }));
     }
 
+    /// <summary>行程游標必須成對提供，且 ID 必須是 24 位十六進位字串。</summary>
+    [Fact]
+    public void PagedItineraryRequest_ValidatesCursorContract()
+    {
+        var date = UtcDate(2026, 7, 1);
+
+        Assert.False(IsValid(new PagedItineraryRequest { CursorDate = date }));
+        Assert.False(IsValid(new PagedItineraryRequest { CursorId = "507f1f77bcf86cd799439011" }));
+        Assert.False(IsValid(new PagedItineraryRequest
+        {
+            CursorDate = date,
+            CursorId = "not-an-object-id"
+        }));
+        Assert.True(IsValid(new PagedItineraryRequest
+        {
+            CursorDate = date,
+            CursorId = "507f1f77bcf86cd799439011"
+        }));
+    }
+
     /// <summary>註冊 DTO 應拒絕超長 transport 字串。</summary>
     [Fact]
     public void RegisterRequest_RejectsOversizedEmailDisplayNameAndRole()

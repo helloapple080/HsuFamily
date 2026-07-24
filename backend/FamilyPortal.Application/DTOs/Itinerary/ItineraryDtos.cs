@@ -111,7 +111,7 @@ public class UpsertItineraryRequest : IValidatableObject
 }
 
 /// <summary>分頁查詢請求 DTO</summary>
-public class PagedItineraryRequest
+public class PagedItineraryRequest : IValidatableObject
 {
     /// <summary>篩選標籤</summary>
     [MaxLength(ValidationLimits.MaxTagLength, ErrorMessage = "標籤最多 50 個字元")]
@@ -127,4 +127,29 @@ public class PagedItineraryRequest
     /// <summary>每頁筆數（預設 20，最大 100）</summary>
     [Range(1, ValidationLimits.MaxPageSize)]
     public int PageSize { get; set; } = 20;
+
+    /// <summary>驗證游標欄位必須成對出現，且識別碼符合 MongoDB ObjectId 格式。</summary>
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        var hasCursorDate = CursorDate.HasValue;
+        var hasCursorId = CursorId is not null;
+
+        if (hasCursorDate != hasCursorId)
+        {
+            yield return new ValidationResult(
+                "游標日期與游標 ID 必須同時提供",
+                [nameof(CursorDate), nameof(CursorId)]);
+            yield break;
+        }
+
+        if (hasCursorId &&
+            (string.IsNullOrWhiteSpace(CursorId) ||
+             CursorId.Length != 24 ||
+             !CursorId.All(Uri.IsHexDigit)))
+        {
+            yield return new ValidationResult(
+                "游標 ID 格式不正確",
+                [nameof(CursorId)]);
+        }
+    }
 }

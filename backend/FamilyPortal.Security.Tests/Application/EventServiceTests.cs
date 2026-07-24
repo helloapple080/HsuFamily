@@ -6,6 +6,7 @@ using FamilyPortal.Application.Interfaces;
 using FamilyPortal.Application.Services;
 using FamilyPortal.Domain.Entities;
 using FamilyPortal.Domain.Enums;
+using FamilyPortal.Domain.ValueObjects;
 using Xunit;
 
 namespace FamilyPortal.Security.Tests.Application;
@@ -151,7 +152,83 @@ public sealed class EventServiceTests
         Assert.True(result.IsSuccess);
         Assert.Equal(DateTimeKind.Utc, repository.LastRange!.Value.Start.Kind);
         Assert.Equal(DateTimeKind.Utc, repository.LastRange.Value.End.Kind);
+        Assert.Equal(ValidationLimits.MaxPageSize, repository.LastRangeLimit);
         Assert.Equal(source.Token, repository.LastCancellationToken);
+    }
+
+    /// <summary>讀取事件時應複製農曆資料並忽略資料庫內不可信的顯示文字。</summary>
+    [Fact]
+    public async Task GetByIdAsync_RebuildsCanonicalLunarDisplayTextWithoutSharingEntityObject()
+    {
+        var repository = new FakeEventRepository
+        {
+            Stored = new Event
+            {
+                Id = "event-1",
+                Title = "農曆事件",
+                CreatedBy = "creator-1",
+                LunarDate = new LunarDate
+                {
+                    Year = 2026,
+                    Month = 1,
+                    Day = 1,
+                    DisplayText = "偽造文字"
+                }
+            }
+        };
+        var service = new EventService(repository, new FakeCalendarNotifier());
+
+        var result = await service.GetByIdAsync("event-1", CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("農曆正月初一", result.Value!.LunarDate?.DisplayText);
+        Assert.NotSame(repository.Stored.LunarDate, result.Value.LunarDate);
+    }
+
+    /// <summary>讀取非法舊資料時應使用固定安全文字且不得因陣列索引而失敗。</summary>
+    [Theory]
+    [InlineData(0, 1)]
+    [InlineData(13, 1)]
+    [InlineData(1, 0)]
+    [InlineData(1, 31)]
+    public async Task GetByIdAsync_InvalidLegacyLunarDateUsesDeterministicFallback(int month, int day)
+    {
+        var repository = new FakeEventRepository
+        {
+            Stored = new Event
+            {
+                Id = "event-1",
+                Title = "舊資料",
+                CreatedBy = "creator-1",
+                LunarDate = new LunarDate
+                {
+                    Year = 2026,
+                    Month = month,
+                    Day = day,
+                    DisplayText = "不可採信"
+                }
+            }
+        };
+        var service = new EventService(repository, new FakeCalendarNotifier());
+
+        var result = await service.GetByIdAsync("event-1", CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("農曆日期無效", result.Value!.LunarDate?.DisplayText);
+    }
+
+    /// <summary>所有事件清單查詢都應使用中央定義的最大筆數。</summary>
+    [Fact]
+    public async Task ListQueries_RequestExactlyMaximumPageSize()
+    {
+        var repository = new FakeEventRepository();
+        var service = new EventService(repository, new FakeCalendarNotifier());
+
+        await service.GetByTypeAsync(nameof(EventType.General), CancellationToken.None);
+        await service.GetByLunarDateAsync(1, 1, CancellationToken.None);
+
+        Assert.Equal(ValidationLimits.MaxPageSize, repository.LastTypeLimit);
+        Assert.Equal(ValidationLimits.MaxPageSize, repository.LastLunarLimit);
     }
 
     private static UpsertEventRequest ValidRequest() => new()
@@ -187,6 +264,9 @@ public sealed class EventServiceTests
         public Event? Updated { get; private set; }
         public string? DeletedId { get; private set; }
         public (DateTime Start, DateTime End)? LastRange { get; private set; }
+        public int LastRangeLimit { get; private set; }
+        public int LastTypeLimit { get; private set; }
+        public int LastLunarLimit { get; private set; }
         public CancellationToken LastCancellationToken { get; private set; }
 
         /// <inheritdoc />
@@ -248,9 +328,11 @@ public sealed class EventServiceTests
         public Task<List<Event>> GetByDateRangeAsync(
             DateTime start,
             DateTime end,
+            int limit,
             CancellationToken cancellationToken = default)
         {
             LastRange = (start, end);
+            LastRangeLimit = limit;
             LastCancellationToken = cancellationToken;
             return Task.FromResult(new List<Event>());
         }
@@ -258,17 +340,28 @@ public sealed class EventServiceTests
         /// <inheritdoc />
         public Task<List<Event>> GetByEventTypeAsync(
             EventType eventType,
-            CancellationToken cancellationToken = default) => Task.FromResult(new List<Event>());
+            int limit,
+            CancellationToken cancellationToken = default)
+        {
+            LastTypeLimit = limit;
+            return Task.FromResult(new List<Event>());
+        }
 
         /// <inheritdoc />
         public Task<List<Event>> GetByTagAsync(
             string tag,
+            int limit,
             CancellationToken cancellationToken = default) => Task.FromResult(new List<Event>());
 
         /// <inheritdoc />
         public Task<List<Event>> GetByLunarDateAsync(
             int month,
             int day,
-            CancellationToken cancellationToken = default) => Task.FromResult(new List<Event>());
+            int limit,
+            CancellationToken cancellationToken = default)
+        {
+            LastLunarLimit = limit;
+            return Task.FromResult(new List<Event>());
+        }
     }
 }
