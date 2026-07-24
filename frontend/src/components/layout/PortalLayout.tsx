@@ -18,6 +18,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import ConnectionStatus from '@/components/common/ConnectionStatus'
+import { useSignalR } from '@/hooks/useSignalR'
 
 const navItems = [
   { href: '/calendar', label: '行事曆', icon: CalendarDays, description: '國農曆雙顯示' },
@@ -35,6 +37,7 @@ export default function PortalLayout({ children }: PortalLayoutProps) {
   const pathname = usePathname()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const { user, isAuthenticated, isAdmin, isHydrated, logout } = useAuthStore()
+  const { status: signalRStatus, reconnect: reconnectSignalR } = useSignalR()
 
   useEffect(() => {
     if (isHydrated && !isAuthenticated) router.replace('/login')
@@ -158,7 +161,10 @@ export default function PortalLayout({ children }: PortalLayoutProps) {
       </Sheet>
 
       <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 pt-16 md:ml-64 md:pt-0">
-        <div className="p-4 sm:p-6 lg:p-8">{children}</div>
+        <div className="space-y-4 p-4 sm:p-6 lg:p-8">
+          <ConnectionStatus status={signalRStatus} reconnect={reconnectSignalR} />
+          {children}
+        </div>
       </main>
     </div>
   )

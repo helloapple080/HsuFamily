@@ -8,6 +8,10 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }))
 
+vi.mock('@/hooks/useSignalR', () => ({
+  useSignalR: () => ({ on: vi.fn(), reconnect: vi.fn(), status: 'connected' }),
+}))
+
 describe('PortalLayout', () => {
   beforeEach(() => {
     useAuthStore.setState({
