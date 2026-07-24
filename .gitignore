@@ -30,6 +30,7 @@ backend/**/bin/
 backend/**/obj/
 backend/**/*.user
 backend/TestResults/
+backend/**/TestResults/
 
 # ─── 前端 ───
 **/node_modules/

@@ -328,7 +328,7 @@ Use this exact slide sequence:
 
 1. 封面：許氏入口網全面修復成果。
 2. 一頁結論：從「具企業思維」到「repository 控制可驗證」。
-3. 原始風險：3 High、13 Medium groups、4 Low groups。
+3. 原始風險：依當時 audit 保留歷史分級；簡報現況必須改讀最新版風險台帳，不得沿用舊統計。
 4. 修復地圖：供應鏈、部署、後端、前端、SDLC。
 5. 資料保護：沒有 drop、沒有清空、API 相容。
 6. 安全架構：TLS edge → frontend/API → Application Services → MongoDB。
