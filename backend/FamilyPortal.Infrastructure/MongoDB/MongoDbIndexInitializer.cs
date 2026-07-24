@@ -150,6 +150,14 @@ public class MongoDbIndexInitializer
                 Builders<Itinerary>.IndexKeys.Ascending(i => i.Tags),
                 new CreateIndexOptions { Name = "idx_tags" }
             ),
+            // 標籤篩選 + 穩定日期游標排序（保留既有索引，待 staging 證據再評估清理）
+            new(
+                Builders<Itinerary>.IndexKeys
+                    .Ascending(i => i.Tags)
+                    .Descending(i => i.Date)
+                    .Descending(i => i.Id),
+                new CreateIndexOptions { Name = "idx_tags_date_id" }
+            ),
             // 建立者索引
             new(
                 Builders<Itinerary>.IndexKeys.Ascending(i => i.CreatedBy),
