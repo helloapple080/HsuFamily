@@ -2,6 +2,8 @@ using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using FamilyPortal.Application.DTOs;
+using FamilyPortal.Application.Interfaces;
+using FamilyPortal.Application.Services;
 using FamilyPortal.Api.Configuration;
 using FamilyPortal.Api.Middleware;
 using FamilyPortal.Infrastructure;
@@ -45,6 +47,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 // 1. 基礎設施服務註冊 (Infrastructure DI)
 // ─────────────────────────────────────────────
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddScoped<IEventService, EventService>();
 
 // ─────────────────────────────────────────────
 // 2. JWT 認證配置

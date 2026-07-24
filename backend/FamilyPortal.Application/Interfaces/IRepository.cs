@@ -11,29 +11,37 @@ namespace FamilyPortal.Application.Interfaces;
 public interface IRepository<T> where T : BaseEntity
 {
     /// <summary>根據 ID 取得單一文件</summary>
-    Task<T?> GetByIdAsync(string id);
+    Task<T?> GetByIdAsync(string id, CancellationToken cancellationToken = default);
 
     /// <summary>取得所有文件</summary>
-    Task<List<T>> GetAllAsync();
+    Task<List<T>> GetAllAsync(CancellationToken cancellationToken = default);
 
     /// <summary>根據篩選條件取得文件清單</summary>
-    Task<List<T>> FindAsync(Expression<Func<T, bool>> filter);
+    Task<List<T>> FindAsync(
+        Expression<Func<T, bool>> filter,
+        CancellationToken cancellationToken = default);
 
     /// <summary>根據篩選條件取得單一文件</summary>
-    Task<T?> FindOneAsync(Expression<Func<T, bool>> filter);
+    Task<T?> FindOneAsync(
+        Expression<Func<T, bool>> filter,
+        CancellationToken cancellationToken = default);
 
     /// <summary>新增一筆文件</summary>
-    Task CreateAsync(T entity);
+    Task CreateAsync(T entity, CancellationToken cancellationToken = default);
 
     /// <summary>更新一筆文件（整筆替換）</summary>
-    Task UpdateAsync(string id, T entity);
+    Task UpdateAsync(string id, T entity, CancellationToken cancellationToken = default);
 
     /// <summary>刪除一筆文件</summary>
-    Task DeleteAsync(string id);
+    Task DeleteAsync(string id, CancellationToken cancellationToken = default);
 
     /// <summary>檢查文件是否存在</summary>
-    Task<bool> ExistsAsync(Expression<Func<T, bool>> filter);
+    Task<bool> ExistsAsync(
+        Expression<Func<T, bool>> filter,
+        CancellationToken cancellationToken = default);
 
     /// <summary>取得符合條件的文件總數</summary>
-    Task<long> CountAsync(Expression<Func<T, bool>>? filter = null);
+    Task<long> CountAsync(
+        Expression<Func<T, bool>>? filter = null,
+        CancellationToken cancellationToken = default);
 }

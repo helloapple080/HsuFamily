@@ -1,257 +1,165 @@
+using System.Security.Claims;
+using FamilyPortal.Application.Common;
 using FamilyPortal.Application.DTOs;
-using FamilyPortal.Application.DTOs.Common;
 using FamilyPortal.Application.DTOs.Event;
 using FamilyPortal.Application.Interfaces;
-using FamilyPortal.Domain.Enums;
-using FamilyPortal.Infrastructure.Hubs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.SignalR;
 
 namespace FamilyPortal.Api.Controllers;
 
-/// <summary>
-/// 行事曆事件控制器 — 事件 CRUD 與 SignalR 即時推播
-/// 寫入操作完成後自動透過 SignalR 通知所有在線用戶
-/// </summary>
+/// <summary>行事曆事件 HTTP adapter。</summary>
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class EventsController : ControllerBase
+public class EventsController(IEventService eventService) : ControllerBase
 {
-    private readonly IEventRepository _eventRepo;
-    private readonly IHubContext<CalendarHub> _calendarHub;
-    private readonly ILogger<EventsController> _logger;
-
-    public EventsController(
-        IEventRepository eventRepo,
-        IHubContext<CalendarHub> calendarHub,
-        ILogger<EventsController> logger)
-    {
-        _eventRepo = eventRepo;
-        _calendarHub = calendarHub;
-        _logger = logger;
-    }
-
-    /// <summary>
-    /// GET /api/events?start=...&end=... — 根據日期範圍取得事件（行事曆月檢視）
-    /// </summary>
+    /// <summary>GET /api/events?start=...&amp;end=... — 根據日期範圍取得事件。</summary>
     [HttpGet]
     public async Task<ActionResult<ApiResponse<List<EventResponse>>>> GetByDateRange(
-        [FromQuery] EventRangeRequest request)
+        [FromQuery] EventRangeRequest request,
+        CancellationToken cancellationToken)
     {
-        var events = await _eventRepo.GetByDateRangeAsync(request.Start, request.End);
-        var response = events.Select(MapToResponse).ToList();
-        return Ok(ApiResponse<List<EventResponse>>.Ok(response));
+        var result = await eventService.GetByDateRangeAsync(request, cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<List<EventResponse>>.Ok([.. result.Value!]))
+            : ToListActionResult(result);
     }
 
-    /// <summary>
-    /// GET /api/events/{id} — 取得單一事件
-    /// </summary>
+    /// <summary>GET /api/events/{id} — 取得單一事件。</summary>
     [HttpGet("{id}")]
-    public async Task<ActionResult<ApiResponse<EventResponse>>> GetById(string id)
+    public async Task<ActionResult<ApiResponse<EventResponse>>> GetById(
+        string id,
+        CancellationToken cancellationToken)
     {
-        var evt = await _eventRepo.GetByIdAsync(id);
-        if (evt == null)
-        {
-            return NotFound(ApiResponse<EventResponse>.Fail("事件不存在"));
-        }
-
-        return Ok(ApiResponse<EventResponse>.Ok(MapToResponse(evt)));
+        var result = await eventService.GetByIdAsync(id, cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<EventResponse>.Ok(result.Value!))
+            : ToActionResult(result);
     }
 
-    /// <summary>
-    /// GET /api/events/type/{eventType} — 根據類型取得事件
-    /// </summary>
+    /// <summary>GET /api/events/type/{eventType} — 根據類型取得事件。</summary>
     [HttpGet("type/{eventType}")]
-    public async Task<ActionResult<ApiResponse<List<EventResponse>>>> GetByType(string eventType)
+    public async Task<ActionResult<ApiResponse<List<EventResponse>>>> GetByType(
+        string eventType,
+        CancellationToken cancellationToken)
     {
-        if (!Enum.TryParse<EventType>(eventType, true, out var type))
-        {
-            return BadRequest(ApiResponse<List<EventResponse>>.Fail("無效的事件類型"));
-        }
-
-        var events = await _eventRepo.GetByEventTypeAsync(type);
-        var response = events.Select(MapToResponse).ToList();
-        return Ok(ApiResponse<List<EventResponse>>.Ok(response));
+        var result = await eventService.GetByTypeAsync(eventType, cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<List<EventResponse>>.Ok([.. result.Value!]))
+            : ToListActionResult(result);
     }
 
-    /// <summary>
-    /// GET /api/events/lunar?month=...&day=... — 根據農曆日期取得事件
-    /// </summary>
+    /// <summary>GET /api/events/lunar?month=...&amp;day=... — 根據農曆日期取得事件。</summary>
     [HttpGet("lunar")]
     public async Task<ActionResult<ApiResponse<List<EventResponse>>>> GetByLunarDate(
-        [FromQuery] int month, [FromQuery] int day)
+        [FromQuery] int month,
+        [FromQuery] int day,
+        CancellationToken cancellationToken)
     {
-        var events = await _eventRepo.GetByLunarDateAsync(month, day);
-        var response = events.Select(MapToResponse).ToList();
-        return Ok(ApiResponse<List<EventResponse>>.Ok(response));
+        var result = await eventService.GetByLunarDateAsync(month, day, cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<List<EventResponse>>.Ok([.. result.Value!]))
+            : ToListActionResult(result);
     }
 
-    /// <summary>
-    /// POST /api/events — 新增事件（僅 Admin），並透過 SignalR 推播
-    /// </summary>
+    /// <summary>POST /api/events — 新增事件（僅 Admin），並推播行事曆變更。</summary>
     [HttpPost]
     [Authorize(Policy = "AdminOnly")]
-    public async Task<ActionResult<ApiResponse<EventResponse>>> Create([FromBody] UpsertEventRequest request)
+    public async Task<ActionResult<ApiResponse<EventResponse>>> Create(
+        [FromBody] UpsertEventRequest request,
+        CancellationToken cancellationToken)
     {
-        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        if (userId == null) return Unauthorized(ApiResponse<EventResponse>.Fail("未授權"));
-
-        if (!Enum.TryParse<EventType>(request.EventType, true, out var eventType))
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
         {
-            return BadRequest(ApiResponse<EventResponse>.Fail("無效的事件類型"));
+            return Unauthorized(ApiResponse<EventResponse>.Fail("未授權"));
         }
 
-        var evt = new Domain.Entities.Event
-        {
-            Title = request.Title,
-            Description = request.Description,
-            EventType = eventType,
-            StartDate = request.StartDate,
-            EndDate = request.EndDate,
-            IsAllDay = request.IsAllDay,
-            IsLunarDate = request.IsLunarDate,
-            LunarDate = MapLunarDateRequest(request.LunarDate),
-            RecurrenceRule = MapRecurrenceRuleRequest(request.RecurrenceRule),
-            WorshipDetails = MapWorshipDetailsRequest(request.WorshipDetails),
-            RelatedMemberIds = request.RelatedMemberIds,
-            Tags = request.Tags,
-            Color = request.Color,
-            CreatedBy = userId
-        };
-
-        await _eventRepo.CreateAsync(evt);
-        _logger.LogInformation("新增事件：{EventId}", evt.Id);
-
-        // 🔔 SignalR 即時推播 — 通知所有在線用戶
-        await _calendarHub.Clients.Group("FamilyCalendar")
-            .SendAsync("EventCreated", MapToResponse(evt));
-
-        return CreatedAtAction(
-            nameof(GetById),
-            new { id = evt.Id },
-            ApiResponse<EventResponse>.Ok(MapToResponse(evt), "事件新增成功"));
+        var result = await eventService.CreateAsync(request, userId, cancellationToken);
+        return result.IsSuccess
+            ? CreatedAtAction(
+                nameof(GetById),
+                new { id = result.Value!.Id },
+                ApiResponse<EventResponse>.Ok(result.Value, "事件新增成功"))
+            : ToActionResult(result);
     }
 
-    /// <summary>
-    /// PUT /api/events/{id} — 更新事件（僅 Admin），並透過 SignalR 推播
-    /// </summary>
+    /// <summary>PUT /api/events/{id} — 更新事件（僅 Admin），並推播行事曆變更。</summary>
     [HttpPut("{id}")]
     [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<ApiResponse<EventResponse>>> Update(
-        string id, [FromBody] UpsertEventRequest request)
+        string id,
+        [FromBody] UpsertEventRequest request,
+        CancellationToken cancellationToken)
     {
-        var evt = await _eventRepo.GetByIdAsync(id);
-        if (evt == null)
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
         {
-            return NotFound(ApiResponse<EventResponse>.Fail("事件不存在"));
+            return Unauthorized(ApiResponse<EventResponse>.Fail("未授權"));
         }
 
-        if (!Enum.TryParse<EventType>(request.EventType, true, out var eventType))
-        {
-            return BadRequest(ApiResponse<EventResponse>.Fail("無效的事件類型"));
-        }
-
-        evt.Title = request.Title;
-        evt.Description = request.Description;
-        evt.EventType = eventType;
-        evt.StartDate = request.StartDate;
-        evt.EndDate = request.EndDate;
-        evt.IsAllDay = request.IsAllDay;
-        evt.IsLunarDate = request.IsLunarDate;
-        evt.LunarDate = MapLunarDateRequest(request.LunarDate);
-        evt.RecurrenceRule = MapRecurrenceRuleRequest(request.RecurrenceRule);
-        evt.WorshipDetails = MapWorshipDetailsRequest(request.WorshipDetails);
-        evt.RelatedMemberIds = request.RelatedMemberIds;
-        evt.Tags = request.Tags;
-        evt.Color = request.Color;
-
-        await _eventRepo.UpdateAsync(id, evt);
-        _logger.LogInformation("更新事件：{EventId}", evt.Id);
-
-        // 🔔 SignalR 即時推播
-        await _calendarHub.Clients.Group("FamilyCalendar")
-            .SendAsync("EventUpdated", MapToResponse(evt));
-
-        return Ok(ApiResponse<EventResponse>.Ok(MapToResponse(evt), "事件更新成功"));
+        var result = await eventService.UpdateAsync(id, request, userId, cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<EventResponse>.Ok(result.Value!, "事件更新成功"))
+            : ToActionResult(result);
     }
 
-    /// <summary>
-    /// DELETE /api/events/{id} — 刪除事件（僅 Admin），並透過 SignalR 推播
-    /// </summary>
+    /// <summary>DELETE /api/events/{id} — 刪除事件（僅 Admin），並推播行事曆變更。</summary>
     [HttpDelete("{id}")]
     [Authorize(Policy = "AdminOnly")]
-    public async Task<ActionResult<ApiResponse>> Delete(string id)
+    public async Task<ActionResult<ApiResponse>> Delete(
+        string id,
+        CancellationToken cancellationToken)
     {
-        var evt = await _eventRepo.GetByIdAsync(id);
-        if (evt == null)
+        var result = await eventService.DeleteAsync(id, cancellationToken);
+        if (result.IsSuccess)
         {
-            return NotFound(ApiResponse.Fail("事件不存在"));
+            return Ok(ApiResponse.Ok("事件刪除成功"));
         }
 
-        await _eventRepo.DeleteAsync(id);
-        _logger.LogInformation("刪除事件：{EventId}", evt.Id);
-
-        // 🔔 SignalR 即時推播
-        await _calendarHub.Clients.Group("FamilyCalendar")
-            .SendAsync("EventDeleted", new { id });
-
-        return Ok(ApiResponse.Ok("事件刪除成功"));
+        return result.Error switch
+        {
+            ServiceError.Validation => BadRequest(ApiResponse.Fail(result.Message ?? "驗證失敗")),
+            ServiceError.Unauthorized => Unauthorized(ApiResponse.Fail(result.Message ?? "未授權")),
+            ServiceError.Forbidden => StatusCode(
+                StatusCodes.Status403Forbidden,
+                ApiResponse.Fail(result.Message ?? "禁止存取")),
+            ServiceError.NotFound => NotFound(ApiResponse.Fail(result.Message ?? "事件不存在")),
+            ServiceError.Conflict => Conflict(ApiResponse.Fail(result.Message ?? "資料衝突")),
+            _ => StatusCode(
+                StatusCodes.Status500InternalServerError,
+                ApiResponse.Fail("事件操作失敗"))
+        };
     }
 
-    /// <summary>Entity 轉 DTO 映射</summary>
-    private static EventResponse MapToResponse(Domain.Entities.Event evt) => new()
+    private ActionResult<ApiResponse<EventResponse>> ToActionResult(
+        ServiceResult<EventResponse> result) => result.Error switch
     {
-        Id = evt.Id,
-        Title = evt.Title,
-        Description = evt.Description,
-        EventType = evt.EventType.ToString(),
-        StartDate = evt.StartDate,
-        EndDate = evt.EndDate,
-        IsAllDay = evt.IsAllDay,
-        IsLunarDate = evt.IsLunarDate,
-        LunarDate = evt.LunarDate,
-        RecurrenceRule = evt.RecurrenceRule,
-        WorshipDetails = evt.WorshipDetails,
-        RelatedMemberIds = evt.RelatedMemberIds,
-        Tags = evt.Tags,
-        Color = evt.Color,
-        CreatedBy = evt.CreatedBy,
-        CreatedAt = evt.CreatedAt,
-        UpdatedAt = evt.UpdatedAt
+        ServiceError.Validation => BadRequest(ApiResponse<EventResponse>.Fail(result.Message ?? "驗證失敗")),
+        ServiceError.Unauthorized => Unauthorized(ApiResponse<EventResponse>.Fail(result.Message ?? "未授權")),
+        ServiceError.Forbidden => StatusCode(
+            StatusCodes.Status403Forbidden,
+            ApiResponse<EventResponse>.Fail(result.Message ?? "禁止存取")),
+        ServiceError.NotFound => NotFound(ApiResponse<EventResponse>.Fail(result.Message ?? "事件不存在")),
+        ServiceError.Conflict => Conflict(ApiResponse<EventResponse>.Fail(result.Message ?? "資料衝突")),
+        _ => StatusCode(
+            StatusCodes.Status500InternalServerError,
+            ApiResponse<EventResponse>.Fail("事件操作失敗"))
     };
 
-    private static Domain.ValueObjects.LunarDate? MapLunarDateRequest(LunarDateRequest? request) =>
-        request is null
-            ? null
-            : new Domain.ValueObjects.LunarDate
-            {
-                Year = request.Year,
-                Month = request.Month,
-                Day = request.Day,
-                IsLeapMonth = request.IsLeapMonth,
-                DisplayText = request.DisplayText ?? string.Empty
-            };
-
-    private static Domain.ValueObjects.RecurrenceRule? MapRecurrenceRuleRequest(RecurrenceRuleRequest? request) =>
-        request is null
-            ? null
-            : new Domain.ValueObjects.RecurrenceRule
-            {
-                Type = request.Type,
-                Interval = request.Interval,
-                LunarDays = request.LunarDays?.ToList()
-            };
-
-    private static Domain.ValueObjects.WorshipDetails? MapWorshipDetailsRequest(WorshipDetailsRequest? request) =>
-        request is null
-            ? null
-            : new Domain.ValueObjects.WorshipDetails
-            {
-                Deity = request.Deity,
-                Offerings = request.Offerings.ToList(),
-                Preparations = request.Preparations.ToList(),
-                Notes = request.Notes
-            };
+    private ActionResult<ApiResponse<List<EventResponse>>> ToListActionResult(
+        ServiceResult<IReadOnlyList<EventResponse>> result) => result.Error switch
+    {
+        ServiceError.Validation => BadRequest(ApiResponse<List<EventResponse>>.Fail(result.Message ?? "驗證失敗")),
+        ServiceError.Unauthorized => Unauthorized(ApiResponse<List<EventResponse>>.Fail(result.Message ?? "未授權")),
+        ServiceError.Forbidden => StatusCode(
+            StatusCodes.Status403Forbidden,
+            ApiResponse<List<EventResponse>>.Fail(result.Message ?? "禁止存取")),
+        ServiceError.NotFound => NotFound(ApiResponse<List<EventResponse>>.Fail(result.Message ?? "事件不存在")),
+        ServiceError.Conflict => Conflict(ApiResponse<List<EventResponse>>.Fail(result.Message ?? "資料衝突")),
+        _ => StatusCode(
+            StatusCodes.Status500InternalServerError,
+            ApiResponse<List<EventResponse>>.Fail("事件操作失敗"))
+    };
 }

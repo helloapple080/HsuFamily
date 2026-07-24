@@ -24,9 +24,12 @@ public sealed class ValidationBoundaryTests
         var method = typeof(EventsController).GetMethod(nameof(EventsController.GetByDateRange));
 
         Assert.NotNull(method);
-        var parameter = Assert.Single(method.GetParameters());
+        var parameter = method.GetParameters()
+            .Single(item => item.ParameterType == typeof(EventRangeRequest));
         Assert.Equal(typeof(EventRangeRequest), parameter.ParameterType);
         Assert.NotNull(parameter.GetCustomAttribute<FromQueryAttribute>());
+        Assert.True(method.GetParameters()
+            .Any(item => item.ParameterType == typeof(CancellationToken)));
     }
 
     /// <summary>Request DTO 不得直接公開 Domain 巢狀值物件，Response DTO 則維持既有 shape。</summary>
