@@ -50,6 +50,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<IMemberService, MemberService>();
 builder.Services.AddScoped<IItineraryService, ItineraryService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
 
 // ─────────────────────────────────────────────
 // 2. JWT 認證配置

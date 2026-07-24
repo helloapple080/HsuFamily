@@ -1,3 +1,4 @@
+using System.IdentityModel.Tokens.Jwt;
 using FamilyPortal.Domain.Entities;
 using FamilyPortal.Domain.Enums;
 using FamilyPortal.Infrastructure.Security;
@@ -58,7 +59,10 @@ public class JwtTokenServiceTests
         };
 
         var token = _tokenService.GenerateAccessToken(user);
+        var jwt = new JwtSecurityTokenHandler().ReadJwtToken(token.Token);
 
-        Assert.Equal(user.Id, _tokenService.GetUserIdFromExpiredToken(token));
+        Assert.Equal(user.Id, _tokenService.GetUserIdFromExpiredToken(token.Token));
+        Assert.True(token.ExpiresAt > DateTime.UtcNow);
+        Assert.Equal(token.ExpiresAt, jwt.ValidTo);
     }
 }

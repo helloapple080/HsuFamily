@@ -12,8 +12,8 @@ public interface ITokenService
     /// 生成 JWT Access Token
     /// </summary>
     /// <param name="user">使用者實體</param>
-    /// <returns>JWT Token 字串</returns>
-    string GenerateAccessToken(User user);
+    /// <returns>JWT Token 與其精確過期時間</returns>
+    GeneratedAccessToken GenerateAccessToken(User user);
 
     /// <summary>
     /// 生成 Refresh Token
@@ -35,6 +35,9 @@ public interface ITokenService
     /// <returns>使用者 ID，若無效則回傳 null</returns>
     string? GetUserIdFromExpiredToken(string token);
 }
+
+/// <summary>新產生的 Access Token 與其精確過期時間。</summary>
+public sealed record GeneratedAccessToken(string Token, DateTime ExpiresAt);
 
 /// <summary>新產生的 Refresh Token 與其可持久化安全版本。</summary>
 public sealed class GeneratedRefreshToken
