@@ -10,6 +10,9 @@ overrides:
   sharp: 0.35.0
   ws: 7.5.11
 
+patchedDependencies:
+  sonner@2.0.7: 645b4068b96d97f3be569382550b6877bda00c34c26f1251e7ee012bb00cd98f
+
 importers:
 
   .:
@@ -88,7 +91,7 @@ importers:
         version: 7.72.0(react@19.2.4)
       sonner:
         specifier: ^2.0.7
-        version: 2.0.7(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        version: 2.0.7(patch_hash=645b4068b96d97f3be569382550b6877bda00c34c26f1251e7ee012bb00cd98f)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       tailwind-merge:
         specifier: ^3.5.0
         version: 3.5.0
@@ -5224,7 +5227,7 @@ snapshots:
       side-channel-map: 1.0.1
       side-channel-weakmap: 1.0.2
 
-  sonner@2.0.7(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
+  sonner@2.0.7(patch_hash=645b4068b96d97f3be569382550b6877bda00c34c26f1251e7ee012bb00cd98f)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)

@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { connection } from 'next/server'
 import Providers from '@/components/layout/Providers'
 import './globals.css'
+import 'sonner/dist/styles.css'
 
 export const metadata: Metadata = {
   title: {
