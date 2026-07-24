@@ -245,17 +245,7 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi().AllowAnonymous();
 }
 
-// 安全性標頭 Middleware
-app.Use(async (context, next) =>
-{
-    // 防止 XSS
-    context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
-    context.Response.Headers.Append("X-Frame-Options", "DENY");
-    context.Response.Headers.Append("X-XSS-Protection", "1; mode=block");
-    context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
-    context.Response.Headers.Append("Content-Security-Policy", "default-src 'self'");
-    await next();
-});
+app.UseFamilyPortalSecurityHeaders();
 
 app.UseHttpsRedirection();
 app.UseCors("FrontendPolicy");
@@ -319,3 +309,30 @@ app.Logger.LogInformation("🏠 Family Portal API 啟動成功！");
 app.Run();
 
 public partial class Program;
+
+/// <summary>設定 Family Portal API 的 HTTP 安全標頭。</summary>
+public static class SecurityHeadersExtensions
+{
+    /// <summary>在非 Development、非 Testing 環境啟用 HSTS，並加入 API 安全標頭。</summary>
+    /// <param name="app">要設定的 Web 應用程式。</param>
+    /// <returns>相同的 Web 應用程式，供 middleware pipeline 串接。</returns>
+    public static WebApplication UseFamilyPortalSecurityHeaders(this WebApplication app)
+    {
+        if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))
+        {
+            app.UseHsts();
+        }
+
+        app.Use(async (context, next) =>
+        {
+            context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            context.Response.Headers["X-Frame-Options"] = "DENY";
+            context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+            context.Response.Headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
+            context.Response.Headers["Cross-Origin-Opener-Policy"] = "same-origin";
+            await next();
+        });
+
+        return app;
+    }
+}

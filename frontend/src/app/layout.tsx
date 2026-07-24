@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { connection } from 'next/server'
 import Providers from '@/components/layout/Providers'
 import './globals.css'
 
@@ -11,11 +12,13 @@ export const metadata: Metadata = {
   keywords: ['家庭', '行事曆', '農曆', '拜拜', '即時同步'],
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  await connection()
+
   return (
     <html
       lang="zh-TW"
