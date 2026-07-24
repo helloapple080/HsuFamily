@@ -16,7 +16,7 @@ services:
     networks:
       - family-portal-network
     healthcheck:
-      test: ["CMD-SHELL", "mongosh --quiet --username familyportal_root --password '$$MONGO_INITDB_ROOT_PASSWORD' --authenticationDatabase admin --eval \"db.adminCommand('ping').ok\" | grep 1"]
+      test: ["CMD-SHELL", "mongosh --quiet --username familyportal_root --password \"$$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --eval \"db.adminCommand('ping').ok\" | grep 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -30,7 +30,7 @@ services:
       MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD:?MONGO_APP_PASSWORD is required}
     volumes:
       - ./backend/scripts/ensure-app-user.js:/scripts/ensure-app-user.js:ro
-    command: ["mongosh", "mongodb://familyportal_root:$${MONGO_ROOT_PASSWORD}@mongodb:27017/admin", "--file", "/scripts/ensure-app-user.js"]
+    command: ["sh", "-c", "exec mongosh --host mongodb --port 27017 --username familyportal_root --password \"$$MONGO_ROOT_PASSWORD\" --authenticationDatabase admin --file /scripts/ensure-app-user.js"]
     depends_on:
       mongodb:
         condition: service_healthy
@@ -99,6 +99,9 @@ services:
   caddy:
     image: caddy:2.10.2-alpine
     restart: unless-stopped
+    environment:
+      PORTAL_DOMAIN: ${PORTAL_DOMAIN:?PORTAL_DOMAIN is required}
+      API_DOMAIN: ${API_DOMAIN:?API_DOMAIN is required}
     ports:
       - "80:80"
       - "443:443"
@@ -111,11 +114,15 @@ services:
       - backend
       - frontend
     networks:
-      - family-portal-network
+      family-portal-network:
+        ipv4_address: ${CADDY_PROXY_IP:?CADDY_PROXY_IP is required}
 
 networks:
   family-portal-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: ${FAMILY_PORTAL_SUBNET:-172.20.0.0/24}
 
 volumes:
   mongodb_data:
