@@ -12,7 +12,7 @@ public static class ProductionSecurityOptions
     /// <exception cref="InvalidOperationException">正式環境安全設定無效時擲出。</exception>
     public static void Validate(IConfiguration configuration, string environmentName)
     {
-        if (!string.Equals(environmentName, Environments.Production, StringComparison.Ordinal))
+        if (!string.Equals(environmentName, Environments.Production, StringComparison.OrdinalIgnoreCase))
         {
             return;
         }
@@ -23,10 +23,26 @@ public static class ProductionSecurityOptions
         }
 
         var origins = configuration.GetSection("AllowedOrigins").Get<string[]>() ?? [];
-        if (origins.Length == 0 || origins.Any(origin =>
-                !Uri.TryCreate(origin, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps))
+        if (origins.Length == 0 || origins.Any(origin => !IsSecureOrigin(origin)))
         {
             throw new InvalidOperationException("Production AllowedOrigins 必須全部使用 HTTPS。");
         }
+    }
+
+    private static bool IsSecureOrigin(string origin)
+    {
+        if (string.IsNullOrEmpty(origin) ||
+            !string.Equals(origin, origin.Trim(), StringComparison.Ordinal) ||
+            !Uri.TryCreate(origin, UriKind.Absolute, out var uri))
+        {
+            return false;
+        }
+
+        return string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) &&
+               !string.IsNullOrEmpty(uri.Host) &&
+               string.IsNullOrEmpty(uri.UserInfo) &&
+               string.IsNullOrEmpty(uri.Query) &&
+               string.IsNullOrEmpty(uri.Fragment) &&
+               (string.IsNullOrEmpty(uri.AbsolutePath) || uri.AbsolutePath == "/");
     }
 }
