@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useCallback } from 'react'
 import * as signalR from '@microsoft/signalr'
+import { apiBaseUrl } from '@/lib/api'
 import { useAuthStore } from '@/stores/authStore'
 
 export function useSignalR() {
@@ -12,7 +13,7 @@ export function useSignalR() {
     if (!isAuthenticated) return
 
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'}/hubs/calendar`, {
+      .withUrl(`${apiBaseUrl}/hubs/calendar`, {
         withCredentials: true,
       })
       .withAutomaticReconnect([0, 2000, 5000, 10000, 30000]) // 重連策略

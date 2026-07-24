@@ -1,0 +1,11 @@
+{$PORTAL_DOMAIN} {
+    encode zstd gzip
+    reverse_proxy frontend:3000
+}
+
+{$API_DOMAIN} {
+    request_body {
+        max_size 1MB
+    }
+    reverse_proxy backend:5001
+}
