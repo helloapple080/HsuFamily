@@ -1,22 +1,82 @@
 import { Lunar, Solar } from 'lunar-javascript'
 
+const lunarMonths = [
+  '正', '二', '三', '四', '五', '六', '七', '八', '九', '十', '冬', '臘',
+] as const
+
+const lunarDays = [
+  '初一', '初二', '初三', '初四', '初五', '初六', '初七', '初八', '初九', '初十',
+  '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '二十',
+  '廿一', '廿二', '廿三', '廿四', '廿五', '廿六', '廿七', '廿八', '廿九', '三十',
+] as const
+
+const taiwanSolarFestivals: Readonly<Record<string, readonly string[]>> = {
+  '01-01': ['元旦'],
+  '02-28': ['和平紀念日'],
+  '04-04': ['兒童節'],
+  '05-01': ['勞動節'],
+  '10-10': ['國慶日'],
+  '12-25': ['行憲紀念日'],
+}
+
+const taiwanLunarFestivals: Readonly<Record<string, readonly string[]>> = {
+  '01-01': ['春節'],
+  '01-15': ['元宵節'],
+  '05-05': ['端午節'],
+  '07-15': ['中元節'],
+  '08-15': ['中秋節'],
+  '09-09': ['重陽節'],
+}
+
+function festivalKey(month: number, day: number): string {
+  return `${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`
+}
+
+/// 取得臺灣地區指定國曆節日，回傳值可安全修改。
+export function getTaiwanSolarFestivals(month: number, day: number): string[] {
+  return [...(taiwanSolarFestivals[festivalKey(month, day)] ?? [])]
+}
+
+/// 取得臺灣地區指定農曆節日，回傳值可安全修改。
+export function getTaiwanLunarFestivals(month: number, day: number): string[] {
+  return [...(taiwanLunarFestivals[festivalKey(month, day)] ?? [])]
+}
+
+/// 以專案規範格式化經驗證的農曆日期。
+export function formatLunarDate(month: number, day: number, isLeapMonth = false): string {
+  if (
+    !Number.isInteger(month) ||
+    month < 1 ||
+    month > 12 ||
+    !Number.isInteger(day) ||
+    day < 1 ||
+    day > 30
+  ) {
+    throw new Error('農曆日期不合法')
+  }
+
+  return `農曆${isLeapMonth ? '閏' : ''}${lunarMonths[month - 1]}月${lunarDays[day - 1]}`
+}
+
 /// 國曆轉農曆
 export function solarToLunar(year: number, month: number, day: number) {
   const solar = Solar.fromYmd(year, month, day)
   const lunar = solar.getLunar()
 
-  const isLeapMonth = lunar.getMonth() < 0 // In lunar-javascript negative month means leap month, but getMonthInChinese might hide this. Actually lunar.getMonth() handles leap. Let's use getMonth() signature.
+  // lunar-javascript 以負數月份表示閏月。
+  const isLeapMonth = lunar.getMonth() < 0
   const absMonth = Math.abs(lunar.getMonth())
+  const lunarDay = lunar.getDay()
 
   return {
     year: lunar.getYear(),
     month: absMonth,
-    day: lunar.getDay(),
-    isLeapMonth: isLeapMonth, 
-    monthChinese: lunar.getMonthInChinese(),
-    dayChinese: lunar.getDayInChinese(),
-    yearGanZhi: lunar.getYearInGanZhi(),   // 天干地支年份
-    displayText: `農曆${isLeapMonth ? '閏' : ''}${lunar.getMonthInChinese()}月${lunar.getDayInChinese()}`
+    day: lunarDay,
+    isLeapMonth,
+    monthChinese: lunarMonths[absMonth - 1],
+    dayChinese: lunarDays[lunarDay - 1],
+    yearGanZhi: lunar.getYearInGanZhi(),
+    displayText: formatLunarDate(absMonth, lunarDay, isLeapMonth),
   }
 }
 
@@ -29,7 +89,7 @@ export function lunarToSolar(year: number, month: number, day: number, isLeapMon
   return {
     year: solar.getYear(),
     month: solar.getMonth(),
-    day: solar.getDay()
+    day: solar.getDay(),
   }
 }
 
@@ -42,17 +102,21 @@ export function getMonthLunarInfo(year: number, month: number) {
     const solar = Solar.fromYmd(year, month, day)
     const lunar = solar.getLunar()
 
+    const lunarMonth = Math.abs(lunar.getMonth())
+
     result.push({
       solarDate: `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`,
-      lunarMonth: lunar.getMonthInChinese(),
-      lunarDay: lunar.getDayInChinese(),
+      lunarMonth: lunarMonths[lunarMonth - 1],
+      lunarDay: lunarDays[lunar.getDay() - 1],
       // 每月初一顯示月份，其餘顯示日
       displayText: lunar.getDay() === 1
-        ? `${lunar.getMonth() < 0 ? '閏' : ''}${lunar.getMonthInChinese()}月`
-        : lunar.getDayInChinese(),
-      festivals: lunar.getFestivals(),      // 農曆節日
-      solarFestivals: solar.getFestivals(), // 國曆節日
-      jieQi: lunar.getJieQi(),             // 節氣
+        ? `${lunar.getMonth() < 0 ? '閏' : ''}${lunarMonths[lunarMonth - 1]}月`
+        : lunarDays[lunar.getDay() - 1],
+      festivals: lunar.getMonth() < 0
+        ? []
+        : getTaiwanLunarFestivals(lunarMonth, lunar.getDay()),
+      solarFestivals: getTaiwanSolarFestivals(month, day),
+      jieQi: lunar.getJieQi(),
     })
   }
 

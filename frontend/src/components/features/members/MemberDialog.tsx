@@ -16,17 +16,29 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useCreateMember, useUpdateMember } from '@/hooks/useMembers'
+import { formatLunarDate } from '@/lib/lunar'
 import type { Member, UpsertMemberRequest } from '@/types/member'
 
-const memberSchema = z.object({
+export const memberSchema = z.object({
   name: z.string().min(1, '請輸入姓名'),
   title: z.string().min(1, '請輸入稱謂 (如: 爸爸)'),
   bloodType: z.string().optional(),
   bio: z.string().optional(),
-  birthday: z.string().optional(),
-  lunarBirthdayMonth: z.number().nullable().optional(),
-  lunarBirthdayDay: z.number().nullable().optional(),
+  birthday: z.string().min(1, '請選擇國曆生日'),
+  lunarBirthdayMonth: z.number().int().min(1).max(12).nullable().optional(),
+  lunarBirthdayDay: z.number().int().min(1).max(30).nullable().optional(),
   isLunarLeapMonth: z.boolean().optional(),
+}).superRefine((data, context) => {
+  const hasMonth = data.lunarBirthdayMonth != null
+  const hasDay = data.lunarBirthdayDay != null
+
+  if (hasMonth === hasDay) return
+
+  context.addIssue({
+    code: 'custom',
+    message: '請同時填寫農曆月份與日期',
+    path: [hasMonth ? 'lunarBirthdayDay' : 'lunarBirthdayMonth'],
+  })
 })
 
 type MemberFormValues = z.infer<typeof memberSchema>
@@ -34,6 +46,39 @@ type MemberFormValues = z.infer<typeof memberSchema>
 interface MemberDialogProps {
   member?: Member
   children: React.ReactElement
+}
+
+/// 將表單資料轉為完整且有效的成員 API payload。
+export function buildMemberPayload(
+  data: MemberFormValues,
+  member?: Member
+): UpsertMemberRequest {
+  const birthday = new Date(`${data.birthday}T00:00:00.000Z`).toISOString()
+  const hasLunarBirthday = data.lunarBirthdayMonth != null && data.lunarBirthdayDay != null
+  const lunarYear = Number.parseInt(data.birthday.slice(0, 4), 10)
+
+  return {
+    name: data.name,
+    title: data.title,
+    bloodType: data.bloodType,
+    bio: data.bio,
+    sortOrder: member?.sortOrder ?? 0,
+    isActive: member?.isActive ?? true,
+    birthday,
+    lunarBirthday: hasLunarBirthday
+      ? {
+          year: lunarYear,
+          month: data.lunarBirthdayMonth!,
+          day: data.lunarBirthdayDay!,
+          isLeapMonth: data.isLunarLeapMonth ?? false,
+          displayText: formatLunarDate(
+            data.lunarBirthdayMonth!,
+            data.lunarBirthdayDay!,
+            data.isLunarLeapMonth ?? false
+          ),
+        }
+      : undefined,
+  }
 }
 
 export function MemberDialog({ member, children }: MemberDialogProps) {
@@ -61,30 +106,7 @@ export function MemberDialog({ member, children }: MemberDialogProps) {
   })
 
   const onSubmit = async (data: MemberFormValues) => {
-    // API expects birthday as string or null.
-    // Ensure properly formatted ISO string or empty.
-    let isoDate = ''
-    if (data.birthday) {
-      // Create a valid ISO string from the input YYYY-MM-DD
-      isoDate = new Date(data.birthday).toISOString()
-    }
-
-    const payload: UpsertMemberRequest = {
-      name: data.name,
-      title: data.title,
-      bloodType: data.bloodType,
-      bio: data.bio,
-      sortOrder: member?.sortOrder ?? 0,
-      isActive: member?.isActive ?? true,
-      birthday: isoDate,
-      lunarBirthday: (data.lunarBirthdayMonth && data.lunarBirthdayDay) ? {
-        year: member?.lunarBirthday?.year ?? 0,
-        month: Number(data.lunarBirthdayMonth),
-        day: Number(data.lunarBirthdayDay),
-        isLeapMonth: data.isLunarLeapMonth ?? false,
-        displayText: '' // 由後續農曆顯示邏輯補齊
-      } : undefined,
-    }
+    const payload = buildMemberPayload(data, member)
 
     if (member) {
       await updateMutation.mutateAsync({ id: member.id, data: payload })
