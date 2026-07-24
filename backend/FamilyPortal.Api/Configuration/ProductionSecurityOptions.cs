@@ -33,6 +33,7 @@ public static class ProductionSecurityOptions
     {
         if (string.IsNullOrEmpty(origin) ||
             !string.Equals(origin, origin.Trim(), StringComparison.Ordinal) ||
+            origin.Contains('@') ||
             !Uri.TryCreate(origin, UriKind.Absolute, out var uri))
         {
             return false;

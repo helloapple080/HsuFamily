@@ -66,6 +66,7 @@ public sealed class ProductionConfigurationTests
     /// <summary>正式環境應拒絕不是純 origin 的 HTTPS URI。</summary>
     [Theory]
     [InlineData("https://trusted.example@evil")]
+    [InlineData("https://@family.example")]
     [InlineData("https://family.example/path")]
     [InlineData("https://family.example?source=test")]
     [InlineData("https://family.example#section")]
