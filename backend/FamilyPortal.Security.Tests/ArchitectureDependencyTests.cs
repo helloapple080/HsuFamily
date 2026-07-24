@@ -12,6 +12,12 @@ public sealed class ArchitectureDependencyTests
         @"(?<![\p{L}\p{N}\p{M}_])FamilyPortal\.Infrastructure(?![\p{L}\p{N}\p{M}_])",
         RegexOptions.CultureInvariant);
 
+    private readonly record struct StringLiteralStart(
+        int QuoteIndex,
+        int QuoteLength,
+        bool IsVerbatim,
+        int DollarCount);
+
     /// <summary>Controller 不得直接引用 Infrastructure 命名空間。</summary>
     [Fact]
     public void Controllers_MustNotReferenceInfrastructureNamespaces()
@@ -58,7 +64,21 @@ public sealed class ArchitectureDependencyTests
         { "var verbatim = @\"FamilyPortal.Infrastructure.Security\";", false },
         { "var interpolated = $\"FamilyPortal.Infrastructure.Security\";", false },
         { "var interpolatedVerbatim = $@\"FamilyPortal.Infrastructure.Security\";", false },
+        { "var expression = $\"{global::FamilyPortal.Infrastructure.Security.SecurityDefaults.Value}\";", true },
+        { "var verbatimExpression = $@\"{global::FamilyPortal.Infrastructure.Security.SecurityDefaults.Value}\";", true },
+        { "var alternateVerbatimExpression = @$\"{global::FamilyPortal.Infrastructure.Security.SecurityDefaults.Value}\";", true },
+        { "var nestedExpression = $\"{new { Value = global::FamilyPortal.Infrastructure.Security.SecurityDefaults.Value }.Value}\";", true },
+        { "var escapedBraces = $\"{{FamilyPortal.Infrastructure.Security}}\";", false },
+        { "var escapedVerbatimBraces = $@\"{{FamilyPortal.Infrastructure.Security}}\";", false },
+        { "var expressionString = $\"{\"FamilyPortal.Infrastructure.Security\".Length}\";", false },
+        { "var expressionVerbatimString = $\"{@\"FamilyPortal.Infrastructure.Security\".Length}\";", false },
+        { "var expressionCharacter = $\"{'x'}\";", false },
+        { "var expressionComment = $\"{/* FamilyPortal.Infrastructure.Security */ 1}\";", false },
         { "var character = 'FamilyPortal.Infrastructure.Security';", false },
+        { "$\"\"\"{global::FamilyPortal.Infrastructure.Security.SecurityDefaults.Value}\"\"\"", true },
+        { "$$\"\"\"{{global::FamilyPortal.Infrastructure.Security.SecurityDefaults.Value}}\"\"\"", true },
+        { "$\"\"\"FamilyPortal.Infrastructure literal\"\"\"", false },
+        { "$$\"\"\"FamilyPortal.Infrastructure literal\"\"\"", false },
         {
             """"
             var raw = """FamilyPortal.Infrastructure.Security""";
@@ -71,12 +91,21 @@ public sealed class ArchitectureDependencyTests
     [Fact]
     public void ApplicationProject_MustOnlyReferenceDomainProject()
     {
-        var references = ApplicationProjectReferenceFileNames();
+        var references = ApplicationProjectReferencePaths();
+        var expectedPath = Path.GetFullPath(Path.Combine(
+            RepositoryRootPath(),
+            "backend",
+            "FamilyPortal.Domain",
+            "FamilyPortal.Domain.csproj"));
 
         Assert.True(
-            references.SetEquals(new[] { "FamilyPortal.Domain.csproj" }),
-            "Application project references must contain only FamilyPortal.Domain.csproj. " +
-            $"Found: {string.Join(", ", references.OrderBy(reference => reference, StringComparer.Ordinal))}.");
+            references.Count == 1,
+            "Application project must contain exactly one ProjectReference. " +
+            $"Found {references.Count}: {string.Join(", ", references)}.");
+        Assert.True(
+            PathsAreEqual(expectedPath, references[0]),
+            "Application project must reference the canonical Domain project path. " +
+            $"Expected: {expectedPath}. Found: {references[0]}.");
     }
 
     private static bool ContainsInfrastructureReference(string source)
@@ -120,9 +149,17 @@ public sealed class ArchitectureDependencyTests
                 continue;
             }
 
-            if (TryGetStringLiteralEnd(source, index, out var stringEndIndex))
+            if (TryGetStringLiteralStart(source, index, out var literal))
             {
-                Mask(sanitized, index, stringEndIndex);
+                var stringEndIndex = literal.DollarCount > 0
+                    ? MaskInterpolatedString(source, sanitized, index, literal)
+                    : FindStringLiteralEnd(source, literal);
+
+                if (literal.DollarCount == 0)
+                {
+                    Mask(sanitized, index, stringEndIndex);
+                }
+
                 index = stringEndIndex;
                 continue;
             }
@@ -133,7 +170,7 @@ public sealed class ArchitectureDependencyTests
         return new string(sanitized);
     }
 
-    private static ISet<string> ApplicationProjectReferenceFileNames()
+    private static IReadOnlyList<string> ApplicationProjectReferencePaths()
     {
         var projectPath = ApplicationProjectPath();
         var projectDirectory = Path.GetDirectoryName(projectPath)
@@ -154,7 +191,7 @@ public sealed class ArchitectureDependencyTests
 
         return includes
             .Select(include => NormalizeProjectReferencePath(include!, projectDirectory))
-            .ToHashSet(StringComparer.Ordinal);
+            .ToArray();
     }
 
     private static int FindCharacterLiteralEnd(string source, int startIndex)
@@ -220,6 +257,33 @@ public sealed class ArchitectureDependencyTests
         return source.Length;
     }
 
+    private static int FindRawInterpolatedStringEnd(string source, StringLiteralStart literal)
+    {
+        var index = literal.QuoteIndex + literal.QuoteLength;
+
+        while (index < source.Length)
+        {
+            if (source[index] == '"' && CountConsecutiveQuotes(source, index) == literal.QuoteLength)
+            {
+                return index + literal.QuoteLength;
+            }
+
+            if (source[index] == '{' &&
+                CountConsecutiveCharacters(source, index, '{') == literal.DollarCount)
+            {
+                var closingBraceIndex = FindInterpolatedExpressionEnd(source, index, literal.DollarCount);
+                index = closingBraceIndex < source.Length
+                    ? closingBraceIndex + literal.DollarCount
+                    : source.Length;
+                continue;
+            }
+
+            index++;
+        }
+
+        return source.Length;
+    }
+
     private static int FindVerbatimStringLiteralEnd(string source, int quoteStartIndex)
     {
         var index = quoteStartIndex + 1;
@@ -262,21 +326,310 @@ public sealed class ArchitectureDependencyTests
             .Replace('\\', Path.DirectorySeparatorChar)
             .Replace('/', Path.DirectorySeparatorChar);
         var fullPath = Path.GetFullPath(normalizedInclude, projectDirectory);
-        var fileName = Path.GetFileName(fullPath);
 
-        if (string.IsNullOrWhiteSpace(fileName))
+        if (!string.Equals(Path.GetExtension(fullPath), ".csproj", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidDataException(
-                $"ProjectReference Include '{include}' does not resolve to a project file name.");
+                $"ProjectReference Include '{include}' does not resolve to a .csproj path.");
         }
 
-        return fileName;
+        return fullPath;
     }
 
-    private static bool TryGetStringLiteralEnd(string source, int startIndex, out int endIndex)
+    private static void CopySanitizedRange(char[] characters, string source, int startIndex, int endIndex)
+    {
+        var sanitizedRange = SanitizeSource(source.Substring(startIndex, endIndex - startIndex));
+        sanitizedRange.CopyTo(0, characters, startIndex, sanitizedRange.Length);
+    }
+
+    private static int FindInterpolatedExpressionEnd(
+        string source,
+        int openingBraceIndex,
+        int braceDelimiterLength)
+    {
+        var depth = 1;
+        var index = openingBraceIndex + braceDelimiterLength;
+
+        while (index < source.Length)
+        {
+            if (source[index] == '/' && index + 1 < source.Length)
+            {
+                if (source[index + 1] == '/')
+                {
+                    var lineEndIndex = source.IndexOf('\n', index + 2);
+                    index = lineEndIndex < 0 ? source.Length : lineEndIndex;
+                    continue;
+                }
+
+                if (source[index + 1] == '*')
+                {
+                    var closingCommentIndex = source.IndexOf("*/", index + 2, StringComparison.Ordinal);
+                    index = closingCommentIndex < 0 ? source.Length : closingCommentIndex + 2;
+                    continue;
+                }
+            }
+
+            if (source[index] == '\'')
+            {
+                index = FindCharacterLiteralEnd(source, index);
+                continue;
+            }
+
+            if (TryGetStringLiteralStart(source, index, out var literal))
+            {
+                index = FindStringLiteralEnd(source, literal);
+                continue;
+            }
+
+            if (source[index] == '{')
+            {
+                depth++;
+                index++;
+                continue;
+            }
+
+            if (source[index] == '}')
+            {
+                if (depth == 1 && CountConsecutiveCharacters(source, index, '}') == braceDelimiterLength)
+                {
+                    return index;
+                }
+
+                depth--;
+                index++;
+                continue;
+            }
+
+            index++;
+        }
+
+        return source.Length;
+    }
+
+    private static int FindInterpolatedStringEnd(string source, StringLiteralStart literal)
+    {
+        var index = literal.QuoteIndex + literal.QuoteLength;
+
+        while (index < source.Length)
+        {
+            if (literal.IsVerbatim)
+            {
+                if (source[index] == '"')
+                {
+                    if (index + 1 < source.Length && source[index + 1] == '"')
+                    {
+                        index += 2;
+                        continue;
+                    }
+
+                    return index + 1;
+                }
+            }
+            else
+            {
+                if (source[index] == '\\')
+                {
+                    index += 2;
+                    continue;
+                }
+
+                if (source[index] == '"')
+                {
+                    return index + 1;
+                }
+            }
+
+            if (source[index] == '{')
+            {
+                if (index + 1 < source.Length && source[index + 1] == '{')
+                {
+                    index += 2;
+                    continue;
+                }
+
+                var closingBraceIndex = FindInterpolatedExpressionEnd(source, index, 1);
+                index = closingBraceIndex < source.Length ? closingBraceIndex + 1 : source.Length;
+                continue;
+            }
+
+            if (source[index] == '}' && index + 1 < source.Length && source[index + 1] == '}')
+            {
+                index += 2;
+                continue;
+            }
+
+            index++;
+        }
+
+        return source.Length;
+    }
+
+    private static int FindStringLiteralEnd(string source, StringLiteralStart literal)
+    {
+        if (literal.QuoteLength >= 3)
+        {
+            return literal.DollarCount > 0
+                ? FindRawInterpolatedStringEnd(source, literal)
+                : FindRawStringLiteralEnd(source, literal.QuoteIndex, literal.QuoteLength);
+        }
+
+        if (literal.DollarCount > 0)
+        {
+            return FindInterpolatedStringEnd(source, literal);
+        }
+
+        return literal.IsVerbatim
+            ? FindVerbatimStringLiteralEnd(source, literal.QuoteIndex)
+            : FindRegularStringLiteralEnd(source, literal.QuoteIndex);
+    }
+
+    private static int MaskInterpolatedString(
+        string source,
+        char[] sanitized,
+        int startIndex,
+        StringLiteralStart literal)
+    {
+        if (literal.QuoteLength >= 3)
+        {
+            return MaskRawInterpolatedString(source, sanitized, startIndex, literal);
+        }
+
+        var index = literal.QuoteIndex + literal.QuoteLength;
+        Mask(sanitized, startIndex, index);
+
+        while (index < source.Length)
+        {
+            if (literal.IsVerbatim)
+            {
+                if (source[index] == '"')
+                {
+                    if (index + 1 < source.Length && source[index + 1] == '"')
+                    {
+                        Mask(sanitized, index, index + 2);
+                        index += 2;
+                        continue;
+                    }
+
+                    Mask(sanitized, index, index + 1);
+                    return index + 1;
+                }
+            }
+            else
+            {
+                if (source[index] == '\\')
+                {
+                    var escapedEndIndex = Math.Min(index + 2, source.Length);
+                    Mask(sanitized, index, escapedEndIndex);
+                    index = escapedEndIndex;
+                    continue;
+                }
+
+                if (source[index] == '"')
+                {
+                    Mask(sanitized, index, index + 1);
+                    return index + 1;
+                }
+            }
+
+            if (source[index] == '{')
+            {
+                if (index + 1 < source.Length && source[index + 1] == '{')
+                {
+                    Mask(sanitized, index, index + 2);
+                    index += 2;
+                    continue;
+                }
+
+                var closingBraceIndex = FindInterpolatedExpressionEnd(source, index, 1);
+                if (closingBraceIndex == source.Length)
+                {
+                    Mask(sanitized, index, source.Length);
+                    return source.Length;
+                }
+
+                Mask(sanitized, index, index + 1);
+                CopySanitizedRange(sanitized, source, index + 1, closingBraceIndex);
+                Mask(sanitized, closingBraceIndex, closingBraceIndex + 1);
+                index = closingBraceIndex + 1;
+                continue;
+            }
+
+            if (source[index] == '}')
+            {
+                var escapedEndIndex = index + 1 < source.Length && source[index + 1] == '}'
+                    ? index + 2
+                    : index + 1;
+                Mask(sanitized, index, escapedEndIndex);
+                index = escapedEndIndex;
+                continue;
+            }
+
+            Mask(sanitized, index, index + 1);
+            index++;
+        }
+
+        return source.Length;
+    }
+
+    private static int MaskRawInterpolatedString(
+        string source,
+        char[] sanitized,
+        int startIndex,
+        StringLiteralStart literal)
+    {
+        var index = literal.QuoteIndex + literal.QuoteLength;
+        Mask(sanitized, startIndex, index);
+
+        while (index < source.Length)
+        {
+            if (source[index] == '"' && CountConsecutiveQuotes(source, index) == literal.QuoteLength)
+            {
+                Mask(sanitized, index, index + literal.QuoteLength);
+                return index + literal.QuoteLength;
+            }
+
+            if (source[index] == '{' &&
+                CountConsecutiveCharacters(source, index, '{') == literal.DollarCount)
+            {
+                var closingBraceIndex = FindInterpolatedExpressionEnd(source, index, literal.DollarCount);
+                if (closingBraceIndex == source.Length)
+                {
+                    Mask(sanitized, index, source.Length);
+                    return source.Length;
+                }
+
+                Mask(sanitized, index, index + literal.DollarCount);
+                CopySanitizedRange(
+                    sanitized,
+                    source,
+                    index + literal.DollarCount,
+                    closingBraceIndex);
+                Mask(sanitized, closingBraceIndex, closingBraceIndex + literal.DollarCount);
+                index = closingBraceIndex + literal.DollarCount;
+                continue;
+            }
+
+            Mask(sanitized, index, index + 1);
+            index++;
+        }
+
+        return source.Length;
+    }
+
+    private static bool PathsAreEqual(string left, string right)
+    {
+        var comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+
+        return string.Equals(left, right, comparison);
+    }
+
+    private static bool TryGetStringLiteralStart(string source, int startIndex, out StringLiteralStart literal)
     {
         var quoteIndex = startIndex;
         var isVerbatim = false;
+        var dollarCount = 0;
 
         if (source[quoteIndex] == '@')
         {
@@ -286,6 +639,7 @@ public sealed class ArchitectureDependencyTests
 
         while (quoteIndex < source.Length && source[quoteIndex] == '$')
         {
+            dollarCount++;
             quoteIndex++;
         }
 
@@ -297,28 +651,28 @@ public sealed class ArchitectureDependencyTests
 
         if (quoteIndex >= source.Length || source[quoteIndex] != '"')
         {
-            endIndex = startIndex;
+            literal = default;
             return false;
         }
 
-        var delimiterLength = CountConsecutiveQuotes(source, quoteIndex);
-        if (delimiterLength >= 3)
-        {
-            endIndex = FindRawStringLiteralEnd(source, quoteIndex, delimiterLength);
-            return true;
-        }
-
-        endIndex = isVerbatim
-            ? FindVerbatimStringLiteralEnd(source, quoteIndex)
-            : FindRegularStringLiteralEnd(source, quoteIndex);
+        literal = new StringLiteralStart(
+            quoteIndex,
+            CountConsecutiveQuotes(source, quoteIndex),
+            isVerbatim,
+            dollarCount);
         return true;
     }
 
     private static int CountConsecutiveQuotes(string source, int startIndex)
     {
+        return CountConsecutiveCharacters(source, startIndex, '"');
+    }
+
+    private static int CountConsecutiveCharacters(string source, int startIndex, char character)
+    {
         var index = startIndex;
 
-        while (index < source.Length && source[index] == '"')
+        while (index < source.Length && source[index] == character)
         {
             index++;
         }
