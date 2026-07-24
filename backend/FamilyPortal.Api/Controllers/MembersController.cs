@@ -1,5 +1,5 @@
+using FamilyPortal.Application.Common;
 using FamilyPortal.Application.DTOs;
-using FamilyPortal.Application.DTOs.Common;
 using FamilyPortal.Application.DTOs.Member;
 using FamilyPortal.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -7,167 +7,120 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FamilyPortal.Api.Controllers;
 
-/// <summary>
-/// 家庭成員控制器 — 成員資料的 CRUD 操作
-/// Read: 所有已登入使用者
-/// Create/Update/Delete: 僅 Admin
-/// </summary>
+/// <summary>家庭成員 HTTP adapter。</summary>
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class MembersController : ControllerBase
+public class MembersController(IMemberService memberService) : ControllerBase
 {
-    private readonly IMemberRepository _memberRepo;
-    private readonly ILogger<MembersController> _logger;
-
-    public MembersController(
-        IMemberRepository memberRepo,
-        ILogger<MembersController> logger)
-    {
-        _memberRepo = memberRepo;
-        _logger = logger;
-    }
-
-    /// <summary>
-    /// GET /api/members — 取得所有啟用的家庭成員（依排序順序）
-    /// </summary>
+    /// <summary>GET /api/members — 取得數量受限且依排序順序排列的啟用家庭成員。</summary>
     [HttpGet]
-    public async Task<ActionResult<ApiResponse<List<MemberResponse>>>> GetAll()
+    public async Task<ActionResult<ApiResponse<List<MemberResponse>>>> GetAll(
+        CancellationToken cancellationToken)
     {
-        var members = await _memberRepo.GetActiveOrderedAsync();
-        var response = members.Select(MapToResponse).ToList();
-        return Ok(ApiResponse<List<MemberResponse>>.Ok(response));
+        var result = await memberService.GetActiveAsync(cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<List<MemberResponse>>.Ok([.. result.Value!]))
+            : ToListActionResult(result);
     }
 
-    /// <summary>
-    /// GET /api/members/{id} — 取得單一成員
-    /// </summary>
+    /// <summary>GET /api/members/{id} — 取得單一成員。</summary>
     [HttpGet("{id}")]
-    public async Task<ActionResult<ApiResponse<MemberResponse>>> GetById(string id)
+    public async Task<ActionResult<ApiResponse<MemberResponse>>> GetById(
+        string id,
+        CancellationToken cancellationToken)
     {
-        var member = await _memberRepo.GetByIdAsync(id);
-        if (member == null)
-        {
-            return NotFound(ApiResponse<MemberResponse>.Fail("成員不存在"));
-        }
-
-        return Ok(ApiResponse<MemberResponse>.Ok(MapToResponse(member)));
+        var result = await memberService.GetByIdAsync(id, cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<MemberResponse>.Ok(result.Value!))
+            : ToActionResult(result);
     }
 
-    /// <summary>
-    /// POST /api/members — 新增家庭成員（僅 Admin）
-    /// </summary>
+    /// <summary>POST /api/members — 新增家庭成員（僅 Admin）。</summary>
     [HttpPost]
     [Authorize(Policy = "AdminOnly")]
-    public async Task<ActionResult<ApiResponse<MemberResponse>>> Create([FromBody] UpsertMemberRequest request)
+    public async Task<ActionResult<ApiResponse<MemberResponse>>> Create(
+        [FromBody] UpsertMemberRequest request,
+        CancellationToken cancellationToken)
     {
-        var member = new Domain.Entities.Member
-        {
-            Name = request.Name,
-            Title = request.Title,
-            Birthday = request.Birthday,
-            LunarBirthday = MapLunarDateRequest(request.LunarBirthday),
-            AvatarUrl = request.AvatarUrl,
-            Bio = request.Bio,
-            ContactInfo = MapContactInfoRequest(request.ContactInfo),
-            BloodType = request.BloodType,
-            SortOrder = request.SortOrder,
-            IsActive = request.IsActive
-        };
-
-        await _memberRepo.CreateAsync(member);
-        _logger.LogInformation("新增家庭成員：{MemberId}", member.Id);
-
-        return CreatedAtAction(
-            nameof(GetById),
-            new { id = member.Id },
-            ApiResponse<MemberResponse>.Ok(MapToResponse(member), "成員新增成功"));
+        var result = await memberService.CreateAsync(request, cancellationToken);
+        return result.IsSuccess
+            ? CreatedAtAction(
+                nameof(GetById),
+                new { id = result.Value!.Id },
+                ApiResponse<MemberResponse>.Ok(result.Value, "成員新增成功"))
+            : ToActionResult(result);
     }
 
-    /// <summary>
-    /// PUT /api/members/{id} — 更新家庭成員（僅 Admin）
-    /// </summary>
+    /// <summary>PUT /api/members/{id} — 更新家庭成員（僅 Admin）。</summary>
     [HttpPut("{id}")]
     [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<ApiResponse<MemberResponse>>> Update(
-        string id, [FromBody] UpsertMemberRequest request)
+        string id,
+        [FromBody] UpsertMemberRequest request,
+        CancellationToken cancellationToken)
     {
-        var member = await _memberRepo.GetByIdAsync(id);
-        if (member == null)
-        {
-            return NotFound(ApiResponse<MemberResponse>.Fail("成員不存在"));
-        }
-
-        member.Name = request.Name;
-        member.Title = request.Title;
-        member.Birthday = request.Birthday;
-        member.LunarBirthday = MapLunarDateRequest(request.LunarBirthday);
-        member.AvatarUrl = request.AvatarUrl;
-        member.Bio = request.Bio;
-        member.ContactInfo = MapContactInfoRequest(request.ContactInfo);
-        member.BloodType = request.BloodType;
-        member.SortOrder = request.SortOrder;
-        member.IsActive = request.IsActive;
-
-        await _memberRepo.UpdateAsync(id, member);
-        _logger.LogInformation("更新家庭成員：{MemberId}", member.Id);
-
-        return Ok(ApiResponse<MemberResponse>.Ok(MapToResponse(member), "成員更新成功"));
+        var result = await memberService.UpdateAsync(id, request, cancellationToken);
+        return result.IsSuccess
+            ? Ok(ApiResponse<MemberResponse>.Ok(result.Value!, "成員更新成功"))
+            : ToActionResult(result);
     }
 
-    /// <summary>
-    /// DELETE /api/members/{id} — 刪除家庭成員（僅 Admin）
-    /// </summary>
+    /// <summary>DELETE /api/members/{id} — 刪除家庭成員（僅 Admin）。</summary>
     [HttpDelete("{id}")]
     [Authorize(Policy = "AdminOnly")]
-    public async Task<ActionResult<ApiResponse>> Delete(string id)
+    public async Task<ActionResult<ApiResponse>> Delete(
+        string id,
+        CancellationToken cancellationToken)
     {
-        var member = await _memberRepo.GetByIdAsync(id);
-        if (member == null)
+        var result = await memberService.DeleteAsync(id, cancellationToken);
+        if (result.IsSuccess)
         {
-            return NotFound(ApiResponse.Fail("成員不存在"));
+            return Ok(ApiResponse.Ok("成員刪除成功"));
         }
 
-        await _memberRepo.DeleteAsync(id);
-        _logger.LogInformation("刪除家庭成員：{MemberId}", member.Id);
-
-        return Ok(ApiResponse.Ok("成員刪除成功"));
+        return result.Error switch
+        {
+            ServiceError.Validation => BadRequest(ApiResponse.Fail(result.Message ?? "驗證失敗")),
+            ServiceError.Unauthorized => Unauthorized(ApiResponse.Fail(result.Message ?? "未授權")),
+            ServiceError.Forbidden => StatusCode(
+                StatusCodes.Status403Forbidden,
+                ApiResponse.Fail(result.Message ?? "禁止存取")),
+            ServiceError.NotFound => NotFound(ApiResponse.Fail(result.Message ?? "成員不存在")),
+            ServiceError.Conflict => Conflict(ApiResponse.Fail(result.Message ?? "資料衝突")),
+            _ => StatusCode(
+                StatusCodes.Status500InternalServerError,
+                ApiResponse.Fail("成員操作失敗"))
+        };
     }
 
-    /// <summary>Entity 轉 DTO 映射</summary>
-    private static MemberResponse MapToResponse(Domain.Entities.Member member) => new()
+    private ActionResult<ApiResponse<MemberResponse>> ToActionResult(
+        ServiceResult<MemberResponse> result) => result.Error switch
     {
-        Id = member.Id,
-        Name = member.Name,
-        Title = member.Title,
-        Birthday = member.Birthday,
-        LunarBirthday = member.LunarBirthday,
-        AvatarUrl = member.AvatarUrl,
-        Bio = member.Bio,
-        ContactInfo = member.ContactInfo,
-        BloodType = member.BloodType,
-        SortOrder = member.SortOrder,
-        IsActive = member.IsActive
+        ServiceError.Validation => BadRequest(ApiResponse<MemberResponse>.Fail(result.Message ?? "驗證失敗")),
+        ServiceError.Unauthorized => Unauthorized(ApiResponse<MemberResponse>.Fail(result.Message ?? "未授權")),
+        ServiceError.Forbidden => StatusCode(
+            StatusCodes.Status403Forbidden,
+            ApiResponse<MemberResponse>.Fail(result.Message ?? "禁止存取")),
+        ServiceError.NotFound => NotFound(ApiResponse<MemberResponse>.Fail(result.Message ?? "成員不存在")),
+        ServiceError.Conflict => Conflict(ApiResponse<MemberResponse>.Fail(result.Message ?? "資料衝突")),
+        _ => StatusCode(
+            StatusCodes.Status500InternalServerError,
+            ApiResponse<MemberResponse>.Fail("成員操作失敗"))
     };
 
-    private static Domain.ValueObjects.LunarDate? MapLunarDateRequest(LunarDateRequest? request) =>
-        request is null
-            ? null
-            : new Domain.ValueObjects.LunarDate
-            {
-                Year = request.Year,
-                Month = request.Month,
-                Day = request.Day,
-                IsLeapMonth = request.IsLeapMonth,
-                DisplayText = request.DisplayText ?? string.Empty
-            };
-
-    private static Domain.ValueObjects.ContactInfo? MapContactInfoRequest(ContactInfoRequest? request) =>
-        request is null
-            ? null
-            : new Domain.ValueObjects.ContactInfo
-            {
-                Phone = request.Phone,
-                LineId = request.LineId
-            };
+    private ActionResult<ApiResponse<List<MemberResponse>>> ToListActionResult(
+        ServiceResult<IReadOnlyList<MemberResponse>> result) => result.Error switch
+    {
+        ServiceError.Validation => BadRequest(ApiResponse<List<MemberResponse>>.Fail(result.Message ?? "驗證失敗")),
+        ServiceError.Unauthorized => Unauthorized(ApiResponse<List<MemberResponse>>.Fail(result.Message ?? "未授權")),
+        ServiceError.Forbidden => StatusCode(
+            StatusCodes.Status403Forbidden,
+            ApiResponse<List<MemberResponse>>.Fail(result.Message ?? "禁止存取")),
+        ServiceError.NotFound => NotFound(ApiResponse<List<MemberResponse>>.Fail(result.Message ?? "成員不存在")),
+        ServiceError.Conflict => Conflict(ApiResponse<List<MemberResponse>>.Fail(result.Message ?? "資料衝突")),
+        _ => StatusCode(
+            StatusCodes.Status500InternalServerError,
+            ApiResponse<List<MemberResponse>>.Fail("成員操作失敗"))
+    };
 }

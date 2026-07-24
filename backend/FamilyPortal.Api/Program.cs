@@ -48,6 +48,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 // ─────────────────────────────────────────────
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddScoped<IEventService, EventService>();
+builder.Services.AddScoped<IMemberService, MemberService>();
 
 // ─────────────────────────────────────────────
 // 2. JWT 認證配置
