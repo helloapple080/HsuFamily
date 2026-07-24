@@ -18,6 +18,10 @@ __MACOSX/
 *.swp
 *.swo
 
+# Codex 隔離工作區與暫存進度
+.worktrees/
+.superpowers/
+
 # ─── 後端 ───
 backend/bin/
 backend/obj/
