@@ -11,7 +11,9 @@ overrides:
   ws: 7.5.11
 
 patchedDependencies:
-  sonner@2.0.7: 645b4068b96d97f3be569382550b6877bda00c34c26f1251e7ee012bb00cd98f
+  sonner@2.0.7:
+    hash: 645b4068b96d97f3be569382550b6877bda00c34c26f1251e7ee012bb00cd98f
+    path: patches/sonner@2.0.7.patch
 
 importers:
 
@@ -5365,6 +5367,10 @@ snapshots:
     optionalDependencies:
       picomatch: 4.0.4
 
+  fdir@6.5.0(picomatch@4.0.5):
+    optionalDependencies:
+      picomatch: 4.0.5
+
   fetch-cookie@2.2.0:
     dependencies:
       set-cookie-parser: 2.7.2
@@ -6420,8 +6426,8 @@ snapshots:
 
   tinyglobby@0.2.17:
     dependencies:
-      fdir: 6.5.0(picomatch@4.0.4)
-      picomatch: 4.0.4
+      fdir: 6.5.0(picomatch@4.0.5)
+      picomatch: 4.0.5
 
   tinyrainbow@3.1.0: {}
 
