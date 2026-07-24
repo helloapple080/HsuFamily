@@ -1,4 +1,5 @@
 using FamilyPortal.Application.DTOs;
+using FamilyPortal.Application.DTOs.Common;
 using FamilyPortal.Application.DTOs.Member;
 using FamilyPortal.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -65,10 +66,10 @@ public class MembersController : ControllerBase
             Name = request.Name,
             Title = request.Title,
             Birthday = request.Birthday,
-            LunarBirthday = request.LunarBirthday,
+            LunarBirthday = MapLunarDateRequest(request.LunarBirthday),
             AvatarUrl = request.AvatarUrl,
             Bio = request.Bio,
-            ContactInfo = request.ContactInfo,
+            ContactInfo = MapContactInfoRequest(request.ContactInfo),
             BloodType = request.BloodType,
             SortOrder = request.SortOrder,
             IsActive = request.IsActive
@@ -100,10 +101,10 @@ public class MembersController : ControllerBase
         member.Name = request.Name;
         member.Title = request.Title;
         member.Birthday = request.Birthday;
-        member.LunarBirthday = request.LunarBirthday;
+        member.LunarBirthday = MapLunarDateRequest(request.LunarBirthday);
         member.AvatarUrl = request.AvatarUrl;
         member.Bio = request.Bio;
-        member.ContactInfo = request.ContactInfo;
+        member.ContactInfo = MapContactInfoRequest(request.ContactInfo);
         member.BloodType = request.BloodType;
         member.SortOrder = request.SortOrder;
         member.IsActive = request.IsActive;
@@ -148,4 +149,25 @@ public class MembersController : ControllerBase
         SortOrder = member.SortOrder,
         IsActive = member.IsActive
     };
+
+    private static Domain.ValueObjects.LunarDate? MapLunarDateRequest(LunarDateRequest? request) =>
+        request is null
+            ? null
+            : new Domain.ValueObjects.LunarDate
+            {
+                Year = request.Year,
+                Month = request.Month,
+                Day = request.Day,
+                IsLeapMonth = request.IsLeapMonth,
+                DisplayText = request.DisplayText ?? string.Empty
+            };
+
+    private static Domain.ValueObjects.ContactInfo? MapContactInfoRequest(ContactInfoRequest? request) =>
+        request is null
+            ? null
+            : new Domain.ValueObjects.ContactInfo
+            {
+                Phone = request.Phone,
+                LineId = request.LineId
+            };
 }

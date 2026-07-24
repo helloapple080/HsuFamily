@@ -1,4 +1,5 @@
 using FamilyPortal.Application.DTOs;
+using FamilyPortal.Application.DTOs.Common;
 using FamilyPortal.Application.DTOs.Itinerary;
 using FamilyPortal.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -106,7 +107,7 @@ public class ItinerariesController : ControllerBase
             EndDate = request.EndDate,
             Location = request.Location,
             Tags = request.Tags,
-            Participants = request.Participants,
+            Participants = MapParticipantRequests(request.Participants),
             Photos = request.Photos,
             Notes = request.Notes,
             LinkedEventId = request.LinkedEventId,
@@ -142,7 +143,7 @@ public class ItinerariesController : ControllerBase
         itinerary.EndDate = request.EndDate;
         itinerary.Location = request.Location;
         itinerary.Tags = request.Tags;
-        itinerary.Participants = request.Participants;
+        itinerary.Participants = MapParticipantRequests(request.Participants);
         itinerary.Photos = request.Photos;
         itinerary.Notes = request.Notes;
         itinerary.LinkedEventId = request.LinkedEventId;
@@ -190,4 +191,12 @@ public class ItinerariesController : ControllerBase
         CreatedAt = itinerary.CreatedAt,
         UpdatedAt = itinerary.UpdatedAt
     };
+
+    private static List<Domain.ValueObjects.ParticipantSnapshot> MapParticipantRequests(
+        IEnumerable<ParticipantRequest> requests) =>
+        requests.Select(request => new Domain.ValueObjects.ParticipantSnapshot
+        {
+            MemberId = request.MemberId,
+            Name = request.Name
+        }).ToList();
 }

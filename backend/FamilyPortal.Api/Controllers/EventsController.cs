@@ -1,4 +1,5 @@
 using FamilyPortal.Application.DTOs;
+using FamilyPortal.Application.DTOs.Common;
 using FamilyPortal.Application.DTOs.Event;
 using FamilyPortal.Application.Interfaces;
 using FamilyPortal.Domain.Enums;
@@ -37,10 +38,9 @@ public class EventsController : ControllerBase
     /// </summary>
     [HttpGet]
     public async Task<ActionResult<ApiResponse<List<EventResponse>>>> GetByDateRange(
-        [FromQuery] DateTime start,
-        [FromQuery] DateTime end)
+        [FromQuery] EventRangeRequest request)
     {
-        var events = await _eventRepo.GetByDateRangeAsync(start, end);
+        var events = await _eventRepo.GetByDateRangeAsync(request.Start, request.End);
         var response = events.Select(MapToResponse).ToList();
         return Ok(ApiResponse<List<EventResponse>>.Ok(response));
     }
@@ -112,9 +112,9 @@ public class EventsController : ControllerBase
             EndDate = request.EndDate,
             IsAllDay = request.IsAllDay,
             IsLunarDate = request.IsLunarDate,
-            LunarDate = request.LunarDate,
-            RecurrenceRule = request.RecurrenceRule,
-            WorshipDetails = request.WorshipDetails,
+            LunarDate = MapLunarDateRequest(request.LunarDate),
+            RecurrenceRule = MapRecurrenceRuleRequest(request.RecurrenceRule),
+            WorshipDetails = MapWorshipDetailsRequest(request.WorshipDetails),
             RelatedMemberIds = request.RelatedMemberIds,
             Tags = request.Tags,
             Color = request.Color,
@@ -160,9 +160,9 @@ public class EventsController : ControllerBase
         evt.EndDate = request.EndDate;
         evt.IsAllDay = request.IsAllDay;
         evt.IsLunarDate = request.IsLunarDate;
-        evt.LunarDate = request.LunarDate;
-        evt.RecurrenceRule = request.RecurrenceRule;
-        evt.WorshipDetails = request.WorshipDetails;
+        evt.LunarDate = MapLunarDateRequest(request.LunarDate);
+        evt.RecurrenceRule = MapRecurrenceRuleRequest(request.RecurrenceRule);
+        evt.WorshipDetails = MapWorshipDetailsRequest(request.WorshipDetails);
         evt.RelatedMemberIds = request.RelatedMemberIds;
         evt.Tags = request.Tags;
         evt.Color = request.Color;
@@ -221,4 +221,37 @@ public class EventsController : ControllerBase
         CreatedAt = evt.CreatedAt,
         UpdatedAt = evt.UpdatedAt
     };
+
+    private static Domain.ValueObjects.LunarDate? MapLunarDateRequest(LunarDateRequest? request) =>
+        request is null
+            ? null
+            : new Domain.ValueObjects.LunarDate
+            {
+                Year = request.Year,
+                Month = request.Month,
+                Day = request.Day,
+                IsLeapMonth = request.IsLeapMonth,
+                DisplayText = request.DisplayText ?? string.Empty
+            };
+
+    private static Domain.ValueObjects.RecurrenceRule? MapRecurrenceRuleRequest(RecurrenceRuleRequest? request) =>
+        request is null
+            ? null
+            : new Domain.ValueObjects.RecurrenceRule
+            {
+                Type = request.Type,
+                Interval = request.Interval,
+                LunarDays = request.LunarDays?.ToList()
+            };
+
+    private static Domain.ValueObjects.WorshipDetails? MapWorshipDetailsRequest(WorshipDetailsRequest? request) =>
+        request is null
+            ? null
+            : new Domain.ValueObjects.WorshipDetails
+            {
+                Deity = request.Deity,
+                Offerings = request.Offerings.ToList(),
+                Preparations = request.Preparations.ToList(),
+                Notes = request.Notes
+            };
 }
