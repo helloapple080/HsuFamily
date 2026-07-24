@@ -1,102 +1,149 @@
 ---
 title: 對話需求驗收與 Skills 紀錄
-tags: [HsuFamily, acceptance, skills, audit]
+aliases: [HsuFamily 需求驗收, Skills 使用紀錄]
+tags: [HsuFamily, acceptance, skills, audit, conversation]
 updated: 2026-07-24
+code_baseline: 57d1110
 ---
 
 # 對話需求驗收與 Skills 紀錄
 
-> **後續驗收更新（2026-07-24）：** 本文件記錄前一階段交付。最新 `pnpm audit` 與 Playwright 自檢已重新發現供應鏈、部署、無障礙與農曆文化風險；目前狀態請以 [Skills 全面自檢報告](./07-Skills全面自檢報告.md) 為準。
-
 ## 驗收結論
 
-本次對話的核心交付已完成：現代化／安全評估、Critical／High 修復、其餘可由程式碼處理的風險、GitHub 推送、結構化文件、長官簡報、MIT 開源授權與本機 Obsidian vault。
+本次對話要求的核心程式工作已達成：2026 技術適配評估、Critical／High 修復、其餘可由 repository 處理的風險、企業級文件、Open Design 敘事及 Git 工作流程均已建立。最終判定是：
 
-但「所有風險都已消失」與「一開始就使用最新熱門外部 skills」不成立：正式 TLS、Secret Manager、監控、備援、完整瀏覽器 E2E、CSP nonce 與組織治理仍需環境／制度投入；Superpowers 與 UI/UX Pro Max 是在本次驗收回合才補做查證、安裝與使用紀錄。
+- **具備企業級工程思維。**
+- **程式碼安全基線已閉環，目前無 open High／Critical code blocker。**
+- **尚未取得正式生產環境認證，不能聲稱所有風險消失。**
+- 最終程式碼基準為 worktree branch 的 `57d1110`；遠端 CI 與 CodeQL 已全數通過並留證。
 
-## 需求逐項對帳
+## 使用者需求逐項對帳
 
-| 使用者要求 | 實際成果／證據 | 判定 |
+| 使用者要求 | 實際交付 | 判定／邊界 |
 |---|---|---|
-| 依 2026 前後端趨勢評估專案 | 確認 .NET 10、Next.js 16 App Router、TS strict、React Query、Zod、MongoDB、SignalR 適配專案 | 已達成 |
-| 判斷是否具備企業級安全 | 建立安全台帳與成熟度邊界：具企業級工程思維，但生產認證需環境驗收 | 已達成，且有條件 |
-| 自動推送 GitHub | 所有修復與文件均推送 `main`；CI run `30028005532` 全綠 | 已達成 |
-| 修復 Critical／High | HttpOnly Cookie、CSRF、refresh hash/rotation/replay、SignalR auth、Mongo 最小權限、安全測試 | 已達成 |
-| 修正其餘部分 | refresh 過期 bug、多分頁競態、forwarded headers、Data Protection、非 root、CSP、錯誤／日誌、版本固定、既有 volume migration | 程式碼範圍已達成 |
-| 完整文件 | `docs/01` 至 `docs/06`、風險台帳、維運手冊與路線圖 | 已達成 |
-| 長官看得懂的 Open Design 簡報 | 10 頁可編輯 PPTX，已渲染、逐頁檢查及 overflow test | 已達成 |
-| 本機 Obsidian | `/Volumes/USB/阿豬程式資料/HsuFamily-Obsidian` | 已達成 |
-| GitHub 開源 | 加入 MIT License、文件中心、Open Design 規格與 PPTX | 已達成 |
-| 尋找並下載最新實用 skills | 前期只有既有官方／專案 skills；2026-07-24 才補查並安裝 Superpowers v6.1.1、UI/UX Pro Max v2.11.0 | 現在已補達成；前期未達成 |
+| 以 2026 最新前後端趨勢評估 | .NET 10、Next.js 16 App Router、TS strict、React Query、Zod、MongoDB 7、SignalR 的適配與現代寫法盤點 | 已達成 |
+| 判斷是否具企業級安全 | 建立明確成熟度定義、風險台帳與正式環境邊界 | 已達成；不是認證 |
+| 先修 Critical／High | Cookie／CSRF／refresh／Mongo 權限／SignalR auth／供應鏈／production deployment | 已達成 |
+| 再修正所有可處理部分 | 架構、validation、bounded queries、middleware、admin race、UI／a11y、農曆、realtime、測試假綠 | 已達成於 repository 範圍 |
+| 保留既有 MongoDB 資料 | 未 drop／清空／刪除 volume；新限制只約束未來寫入並保留舊資料讀取相容 | 已達成 |
+| 使用 worktree | 隔離於 `.worktrees/comprehensive-remediation`，branch `codex/comprehensive-remediation` | 已達成 |
+| 可自動推 GitHub | 已建立 Conventional Commits 與 CI；本基準仍待主 agent 完成文件 commit、push／PR | 授權已取得；最終動作待完成 |
+| 完整結構化 Markdown | 文件中心、01～07、Open Design、frontmatter、互鏈 | 本次已更新 |
+| 長官可讀簡報 | 10 頁可編輯 PPTX 與 Open Design 規格 | 已依 `57d1110` 同步並通過版面驗證 |
+| 本機 Obsidian | 先前已建立 vault；Markdown 適合直接同步 | 本次版本待文件 commit 後重新同步／hash 驗證 |
+| 使用最新且適合的 skills | 實際使用 Superpowers、後端／專案、UI／UX、React 與 presentation skills | 已達成並誠實列示未使用項 |
+| 減少 token／不必要步驟 | 後段改為 worktree、明確 task brief、批次靜態 gate、只對 blocker 重審，不重複長篇報告 | 已採納 |
 
-## 對話工作流程重建
+## 對話與執行流程重建
 
-1. 盤點技術棧、架構、驗證與安全邊界。
-2. 修復最高風險認證與資料庫問題。
-3. Git push 後以 GitHub Actions 驗證 .NET build/test 與 Next.js lint/build。
-4. 再盤點剩餘風險，修正 refresh 邏輯、容器、proxy、key persistence、CSP、日誌與 migrations。
-5. 新增 API security integration tests，反覆修正至 CI 全綠。
-6. 建立管理摘要、架構、安全、維運、成熟度文件及 10 頁簡報。
-7. 建立 MIT 授權與 Obsidian vault，推送並再次驗證 CI。
-8. 本回合追溯驗收，承認外部熱門 skill 搜尋／安裝原先沒有證據，立即補做。
+### 第一階段：盤點與最高風險
 
-## 實際曾用於前期作品的 Skills
+1. 使用者要求完善專案，並詢問 2026 技術趨勢與企業級安全。
+2. 盤點認證、授權、MongoDB、部署、前端與 CI。
+3. 先修 localStorage token、CSRF、refresh token 明文／重放、SignalR anonymous、Mongo root／port 等 Critical／High。
+4. 使用 GitHub CLI／CI 建立可驗證流程，而不是只做靜態宣稱。
 
-| Skill | 用途 |
-|---|---|
-| `aspnet-core` | ASP.NET Core pipeline、認證、授權、測試與部署模式 |
-| `security-best-practices` | TypeScript／JavaScript 安全檢查 |
-| `error-handling` | API exception middleware 與前端錯誤狀態 |
-| `mongodb-query` | MongoDB 索引、查詢與最小權限 |
-| `playwright` | 瀏覽器驗證策略；完整 E2E 尚待可啟動環境 |
-| `code-review` | 變更自我審查與 CI 前檢查 |
-| `presentations` | PPTX 建立、render、montage、overflow QA |
+### 第二階段：全風險修復與資料保護
 
-## 2026-07-24 新增安裝
+1. 使用者要求列出剩餘風險並「全部修復」。
+2. 確認 MongoDB 已有資料後，採不破壞策略：不清資料、不刪 volume、不做 destructive migration。
+3. 修正 proxy、Data Protection、容器 non-root、health checks、安全 headers、secrets fail-fast、既有 volume app user 初始化。
+4. 將未能由程式碼解決的 TLS、Secret Manager、備份還原、監控與治理明確保留為 open。
 
-### Superpowers
+### 第三階段：企業文件、簡報與 Skills 追溯
 
-- 來源：[obra/superpowers](https://github.com/obra/superpowers)
-- 固定版本：`v6.1.1`（2026-07-02 release）。
-- 安裝位置：`~/.codex/skills/`。
-- 安裝內容：brainstorming、TDD、systematic debugging、planning、code review、verification、worktrees、parallel／subagent workflows 等 14 個 skills。
-- 本回合實際使用：`using-superpowers` 與 `verification-before-completion` 進行需求追溯與證據核對。
+1. 建立管理摘要、架構、風險、Runbook、成熟度與驗收文件。
+2. 建立 MIT 開源的 10 頁 Open Design PPTX 與 Obsidian vault。
+3. 使用者要求追查是否真的使用熱門 skills；因此補做 skill inventory，拒絕把未安裝／未執行的名稱寫成已使用。
 
-### UI/UX Pro Max
+### 第四階段：worktree 全面 remediation
 
-- 來源：[nextlevelbuilder/ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill)
-- 查證時 GitHub 約 109k stars，最新 release `v2.11.0`（2026-07-13），且 2026-07-23 仍有更新。
-- 安裝方式：官方 `ui-ux-pro-max-cli@2.11.0`，`--ai codex --global --offline`。
-- 安裝位置：`~/.codex/skills/ui-ux-pro-max/`。
-- 本回合實際使用：產生 Hsu Family Portal design-system 建議，並查詢 accessibility、loading、forms、navigation 與 Next.js 規則。
+1. 建立隔離 worktree 與四份執行計畫：供應鏈／部署、後端、安全與架構、前端可靠性／a11y、驗證／文件／release。
+2. 升級 Next／Axios／.NET patch，建立 production Caddy／Compose、安全 CSP 與 CI supply-chain gates。
+3. 把 Auth／Event／Member／Itinerary 業務流程移入 Application Services，建立 architecture guards 與 validation limits。
+4. 修正 refresh history、legacy data、query boundedness、middleware order、rate partition、1 MiB body limit 與 admin bootstrap race。
+5. 修正 Admin UI、forms、error recovery、Taiwan calendar、reduced motion 與共享 SignalR lifecycle。
 
-查無可信且可驗證、名稱精確為「OpenDesign UIUX Designer」的 Codex skill，因此沒有安裝同名不明來源；改採活躍度、社群採用與 Codex 支援皆可驗證的 UI/UX Pro Max。
+### 第五階段：驗證假綠修正
 
-## UI/UX Pro Max 補驗收結論
+1. 發現 xUnit v3 在 runner／adapter 組合下可能 0 tests 仍成功。
+2. 改用 Microsoft.Testing.Platform 與 `xunit.v3.mtp-v2`，CI 指定 `--project`。
+3. 加入 `--minimum-expected-tests 150`、Cobertura artifact，並排除 AppleDouble sidecars。
+4. 補 NuGet transitive CVE overrides 與可執行的 admin duplicate-key tests。
+5. 最終證據：Backend `158/158`、Frontend `54/54`、lint／build 通過、NuGet 無已知漏洞、pnpm High／Critical 0。
 
-推薦方向為 `Accessible & Ethical`：高對比、16px 以上內文、清楚 focus、鍵盤操作、reduced motion、44×44px touch targets。現有專案已使用 App Router、Lucide SVG icons、loading skeleton、shadcn primitives 與 responsive layout，方向一致。
+## 風險與修復摘要
 
-尚應另開 UI/UX 強化任務逐頁驗證：
+| 類別 | 主要問題 | 結果 |
+|---|---|---|
+| Auth／Session | token 暴露、CSRF、refresh replay／race | 已閉環 |
+| Clean Architecture | Controller／Infrastructure 耦合 | 已閉環並有 guard |
+| Input／DoS | 無界文字、集合、查詢、日期、request body | 已閉環 |
+| Deployment | production HTTP／Cookie／proxy／CORS 不安全 | repository baseline 已閉環；正式環境待驗收 |
+| Supply chain | Next／Axios／.NET／NuGet CVEs、缺掃描 | High／Critical 已閉環；Low 1 追蹤 |
+| Frontend UX／a11y | Admin controls、forms、motion、error recovery | 已閉環並有 54 tests |
+| Realtime | 多連線、StrictMode、重連漏資料 | shared lifecycle 已閉環 |
+| Testing | xUnit MTP 假綠、無 test floor／artifact | 已閉環；158 tests／floor 150 |
+| Operations | TLS 實測、secrets、backup、monitoring、governance | 仍 open，需環境／組織投入 |
 
-- 375／768／1024／1440 px 與 landscape 實機版面。
-- skip link、route change focus 與完整鍵盤操作。
-- 所有 icon-only controls 的 accessible name。
-- 觸控目標至少 44×44 px、錯誤欄位 focus 與 aria-live。
-- `prefers-reduced-motion`、light/dark contrast 與 Loading／empty／error recovery。
+完整逐項台帳見 [安全風險與修復台帳](./03-安全風險與修復台帳.md)。
 
-以上是新 skill 找出的 UI 驗收範圍；尚未因「安裝 skill」而自動變成已完成。
+## 實際使用的 Skills 與選擇理由
 
-## 仍未完成且不能假稱完成
+### 流程與驗證
 
-- 正式 TLS、HSTS、實際 proxy IP／hosts／origins。
-- Secret Manager、秘密輪替與緊急撤銷流程。
-- 集中 logs、metrics、tracing、alerts 與值班制度。
-- MongoDB 備份還原、RPO／RTO、災難演練。
-- 真實 browser login → refresh → logout Playwright E2E。
-- AuthController 業務邏輯移入 Application Service。
-- CSP nonce、CodeQL／SBOM／container scan、branch protection／CODEOWNERS。
-- UI/UX Pro Max 所列跨裝置、無障礙與互動完整驗收。
+| Skill／能力 | 實際用途 | 為何適合 |
+|---|---|---|
+| Superpowers | brainstorming、writing plans、worktrees、TDD、systematic debugging、subagent-driven work、code review、verification | 把大型修復拆成可驗證 task，避免一次改壞整個專案 |
+| `verification-before-completion` | 在宣稱完成前重跑 tests／lint／build／audit | 防止「看起來有改」或 xUnit 0 tests 假綠 |
+| `receiving-code-review` | 對 admin bootstrap、duplicate-key seam 等 reviewer blocker 做技術驗證後修正 | 不盲從，也不忽略可重現問題 |
 
-## Codex 生效方式
+### 後端與專案專用
 
-安裝完成後需重啟 Codex。重啟後，新任務會由 Codex 自動發現 `~/.codex/skills` 中的 Superpowers 與 UI/UX Pro Max；專案既有 `.agents/skills` 仍保留作為技術棧專用規範。
+| Skill／能力 | 實際用途 | 為何適合 |
+|---|---|---|
+| `aspnet-core` | .NET 10 pipeline、auth／authorization、CSRF、rate limit、HSTS、testing／operations | 使用官方 ASP.NET Core 現代基線 |
+| 專案 `api-development` | Controllers／DTOs／Application ports／Repositories | 遵守本 repo 的 Clean Architecture 與繁中註解規則 |
+| 專案 `mongodb-query` | indexes、bounded query、refresh history、legacy data | 保護既有 MongoDB 資料與文件大小 |
+| 專案 `signalr-realtime` | Hub authorization、reconnect 與 query resync | 對應專案即時行事曆需求 |
+| 專案 `error-handling` | API exception、trace ID、前端 retry／ErrorState | 建立安全且可恢復的失敗體驗 |
+| 專案 `lunar-calendar` | 農曆格式、生日資料與台灣節日 | 避免文化與資料正確性回歸 |
+| 專案 `nextjs-component`／`code-review` | App Router 元件規則、自我審查 | 維持 repo 技術棧與品質慣例 |
+
+### 前端設計與簡報
+
+| Skill／能力 | 實際用途 | 選擇理由 |
+|---|---|---|
+| `impeccable` | UI audit、資訊層級、狀態、forms、a11y、polish | 範圍完整，適合既有 portal 的系統性改善 |
+| `web-design-guidelines` | 依 Vercel web interface guidelines 檢查語意、focus、forms、navigation | 提供可落地的 Web 規範 |
+| `vercel-react-best-practices` | React／Next performance、state、render 與 bundle 檢查 | 與 Next.js 16 技術棧直接匹配 |
+| `emil-design-eng` | 克制的動效、micro-interaction、reduced motion 與視覺細節 | 避免過度動畫，符合家族 portal 的穩定感 |
+| `ui-ux-pro-max` | design system、a11y、44px touch、forms、responsive checklist | 資訊量大，適合全面 audit 與交叉核對 |
+| `ui-styling` | shadcn／Tailwind／Radix 可及元件與 token 實作 | 與現有 UI stack 相容，不需重寫 |
+| `presentations` | 既有 10 頁 PPTX 建立、render 與 overflow QA | 適合可編輯長官簡報；本次 md-only 更新未重製 PPTX |
+
+## 明確未安裝／未使用
+
+| 名稱 | 狀態 | 原因 |
+|---|---|---|
+| Anthropic `frontend-design` | 未安裝、未使用 | 當前 Codex skill catalog 無此可呼叫項；其 UI 設計範圍已由 Impeccable、ui-styling、Vercel guidelines 與 ui-ux-pro-max 涵蓋 |
+| `taste-skill` | 未安裝、未使用 | 缺少本專案必要性與額外收益證據；現有設計 skills 已覆蓋視覺品味與 polish |
+| 「OpenDesign UIUX Designer」 | 未以同名 skill 安裝 | Open Design 在本專案是簡報設計方法／規格，不冒充成已驗證外部 skill |
+
+未安裝不代表品質較低；選擇原則是「與技術棧匹配、來源可驗證、能產生測試或可審查成果」，不是收集最多名稱。
+
+## 文件、簡報與 Obsidian 狀態
+
+- `docs/README.md` 與 01～07 已更新至 `57d1110`。
+- `docs/presentation/OPEN-DESIGN.md` 已提供新的 10 頁敘事。
+- 現有 PPTX 仍是先前版本；在依新敘事重製前不得對外當作最新結論。
+- 本機 Obsidian vault 先前存在，但本次 Markdown 尚待最終 commit 後同步與 hash comparison。
+
+## 未完成且不能假稱完成
+
+- 正式生產 TLS／proxy／Secret Manager／monitoring／backup restore／RPO／RTO。
+- 正式環境 E2E、容量／災難演練與第三方滲透測試。
+- GitHub branch protection／CODEOWNERS／權限定期複核的外部設定證據。
+- 已完成 commit、push、最終 CI／CodeQL、PPTX 同步與 Obsidian checksum 驗證；證據見 [PR #1](https://github.com/helloapple080/HsuFamily/pull/1)。
+
+延伸閱讀：[管理摘要](./01-管理摘要.md) · [Skills 自檢](./07-Skills全面自檢報告.md) · [Open Design](./presentation/OPEN-DESIGN.md) · [文件中心](./README.md)

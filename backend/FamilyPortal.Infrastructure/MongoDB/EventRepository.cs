@@ -1,4 +1,5 @@
 using FamilyPortal.Application.Interfaces;
+using FamilyPortal.Application.Common;
 using FamilyPortal.Domain.Entities;
 using FamilyPortal.Domain.Enums;
 using MongoDB.Driver;
@@ -13,7 +14,11 @@ public class EventRepository : MongoRepository<Event>, IEventRepository
     public EventRepository(MongoDbContext context) : base(context, "Events") { }
 
     /// <inheritdoc />
-    public async Task<List<Event>> GetByDateRangeAsync(DateTime start, DateTime end)
+    public async Task<List<Event>> GetByDateRangeAsync(
+        DateTime start,
+        DateTime end,
+        int limit,
+        CancellationToken cancellationToken = default)
     {
         // 重疊查詢：事件開始在查詢結束前，且事件結束在查詢開始後。
         // 無 EndDate 的事件以 StartDate 作為單日事件處理。
@@ -31,27 +36,46 @@ public class EventRepository : MongoRepository<Event>, IEventRepository
         return await _collection
             .Find(filter)
             .SortBy(e => e.StartDate)
-            .ToListAsync();
+            .ThenBy(e => e.Id)
+            .Limit(Math.Clamp(limit, 1, ValidationLimits.MaxPageSize))
+            .ToListAsync(cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task<List<Event>> GetByEventTypeAsync(EventType eventType)
+    public async Task<List<Event>> GetByEventTypeAsync(
+        EventType eventType,
+        int limit,
+        CancellationToken cancellationToken = default)
     {
         return await _collection
             .Find(e => e.EventType == eventType)
             .SortByDescending(e => e.StartDate)
-            .ToListAsync();
+            .ThenBy(e => e.Id)
+            .Limit(Math.Clamp(limit, 1, ValidationLimits.MaxPageSize))
+            .ToListAsync(cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task<List<Event>> GetByTagAsync(string tag)
+    public async Task<List<Event>> GetByTagAsync(
+        string tag,
+        int limit,
+        CancellationToken cancellationToken = default)
     {
         var filter = Builders<Event>.Filter.AnyEq(e => e.Tags, tag);
-        return await _collection.Find(filter).ToListAsync();
+        return await _collection
+            .Find(filter)
+            .SortByDescending(e => e.StartDate)
+            .ThenBy(e => e.Id)
+            .Limit(Math.Clamp(limit, 1, ValidationLimits.MaxPageSize))
+            .ToListAsync(cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task<List<Event>> GetByLunarDateAsync(int month, int day)
+    public async Task<List<Event>> GetByLunarDateAsync(
+        int month,
+        int day,
+        int limit,
+        CancellationToken cancellationToken = default)
     {
         var filter = Builders<Event>.Filter.And(
             Builders<Event>.Filter.Eq(e => e.IsLunarDate, true),
@@ -59,6 +83,11 @@ public class EventRepository : MongoRepository<Event>, IEventRepository
             Builders<Event>.Filter.Eq("lunarDate.day", day)
         );
 
-        return await _collection.Find(filter).ToListAsync();
+        return await _collection
+            .Find(filter)
+            .SortBy(e => e.StartDate)
+            .ThenBy(e => e.Id)
+            .Limit(Math.Clamp(limit, 1, ValidationLimits.MaxPageSize))
+            .ToListAsync(cancellationToken);
     }
 }

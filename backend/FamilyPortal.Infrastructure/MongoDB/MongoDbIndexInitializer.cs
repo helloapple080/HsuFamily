@@ -20,15 +20,15 @@ public class MongoDbIndexInitializer
     /// 建立所有 Collection 的索引
     /// 此方法在 Program.cs 應用程式啟動時呼叫
     /// </summary>
-    public async Task InitializeAsync()
+    public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
-        await CreateUserIndexesAsync();
-        await CreateMemberIndexesAsync();
-        await CreateEventIndexesAsync();
-        await CreateItineraryIndexesAsync();
+        await CreateUserIndexesAsync(cancellationToken);
+        await CreateMemberIndexesAsync(cancellationToken);
+        await CreateEventIndexesAsync(cancellationToken);
+        await CreateItineraryIndexesAsync(cancellationToken);
     }
 
-    private async Task CreateUserIndexesAsync()
+    private async Task CreateUserIndexesAsync(CancellationToken cancellationToken)
     {
         var collection = _context.GetCollection<User>("Users");
         var indexModels = new List<CreateIndexModel<User>>
@@ -50,10 +50,10 @@ public class MongoDbIndexInitializer
             )
         };
 
-        await collection.Indexes.CreateManyAsync(indexModels);
+        await collection.Indexes.CreateManyAsync(indexModels, cancellationToken);
     }
 
-    private async Task CreateMemberIndexesAsync()
+    private async Task CreateMemberIndexesAsync(CancellationToken cancellationToken)
     {
         var collection = _context.GetCollection<Member>("Members");
         var indexModels = new List<CreateIndexModel<Member>>
@@ -72,10 +72,10 @@ public class MongoDbIndexInitializer
             )
         };
 
-        await collection.Indexes.CreateManyAsync(indexModels);
+        await collection.Indexes.CreateManyAsync(indexModels, cancellationToken);
     }
 
-    private async Task CreateEventIndexesAsync()
+    private async Task CreateEventIndexesAsync(CancellationToken cancellationToken)
     {
         var collection = _context.GetCollection<Event>("Events");
         var indexModels = new List<CreateIndexModel<Event>>
@@ -121,10 +121,10 @@ public class MongoDbIndexInitializer
             )
         };
 
-        await collection.Indexes.CreateManyAsync(indexModels);
+        await collection.Indexes.CreateManyAsync(indexModels, cancellationToken);
     }
 
-    private async Task CreateItineraryIndexesAsync()
+    private async Task CreateItineraryIndexesAsync(CancellationToken cancellationToken)
     {
         var collection = _context.GetCollection<Itinerary>("Itineraries");
 
@@ -150,6 +150,14 @@ public class MongoDbIndexInitializer
                 Builders<Itinerary>.IndexKeys.Ascending(i => i.Tags),
                 new CreateIndexOptions { Name = "idx_tags" }
             ),
+            // 標籤篩選 + 穩定日期游標排序（保留既有索引，待 staging 證據再評估清理）
+            new(
+                Builders<Itinerary>.IndexKeys
+                    .Ascending(i => i.Tags)
+                    .Descending(i => i.Date)
+                    .Descending(i => i.Id),
+                new CreateIndexOptions { Name = "idx_tags_date_id" }
+            ),
             // 建立者索引
             new(
                 Builders<Itinerary>.IndexKeys.Ascending(i => i.CreatedBy),
@@ -171,6 +179,6 @@ public class MongoDbIndexInitializer
             )
         };
 
-        await collection.Indexes.CreateManyAsync(indexModels);
+        await collection.Indexes.CreateManyAsync(indexModels, cancellationToken);
     }
 }

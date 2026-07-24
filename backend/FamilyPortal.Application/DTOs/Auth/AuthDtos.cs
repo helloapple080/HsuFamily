@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using FamilyPortal.Application.Common;
 
 namespace FamilyPortal.Application.DTOs.Auth;
 
@@ -54,6 +55,7 @@ public class RegisterRequest
 
     [Required(ErrorMessage = "信箱為必填欄位")]
     [EmailAddress(ErrorMessage = "信箱格式不正確")]
+    [MaxLength(254, ErrorMessage = "信箱最多 254 個字元")]
     public string Email { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "密碼為必填欄位")]
@@ -62,8 +64,10 @@ public class RegisterRequest
     public string Password { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "顯示名稱為必填欄位")]
+    [MaxLength(ValidationLimits.MaxShortTextLength, ErrorMessage = "顯示名稱最多 200 個字元")]
     public string DisplayName { get; set; } = string.Empty;
 
     /// <summary>角色（預設 User）</summary>
+    [MaxLength(ValidationLimits.MaxShortTextLength, ErrorMessage = "角色最多 200 個字元")]
     public string Role { get; set; } = "User";
 }

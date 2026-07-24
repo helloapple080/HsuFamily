@@ -19,11 +19,18 @@ public interface IItineraryRepository : IRepository<Itinerary>
         string? tag = null,
         DateTime? cursorDate = null,
         string? cursorId = null,
-        int pageSize = 20);
+        int pageSize = 20,
+        CancellationToken cancellationToken = default);
 
-    /// <summary>取得某位成員參與過的所有行程</summary>
-    Task<List<Itinerary>> GetByParticipantAsync(string memberId);
+    /// <summary>取得某位成員參與過且數量受限的行程。</summary>
+    Task<List<Itinerary>> GetByParticipantAsync(
+        string memberId,
+        int limit,
+        CancellationToken cancellationToken = default);
 
-    /// <summary>全文搜尋行程（標題與描述）</summary>
-    Task<List<Itinerary>> SearchAsync(string keyword, int limit = 20);
+    /// <summary>全文搜尋數量受限的行程（標題與描述）。</summary>
+    Task<List<Itinerary>> SearchAsync(
+        string keyword,
+        int limit,
+        CancellationToken cancellationToken = default);
 }

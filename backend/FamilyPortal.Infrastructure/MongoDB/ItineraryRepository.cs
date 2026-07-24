@@ -1,6 +1,6 @@
+using FamilyPortal.Application.Common;
 using FamilyPortal.Application.Interfaces;
 using FamilyPortal.Domain.Entities;
-using MongoDB.Bson;
 using MongoDB.Driver;
 
 namespace FamilyPortal.Infrastructure.MongoDB;
@@ -17,7 +17,8 @@ public class ItineraryRepository : MongoRepository<Itinerary>, IItineraryReposit
         string? tag = null,
         DateTime? cursorDate = null,
         string? cursorId = null,
-        int pageSize = 20)
+        int pageSize = 20,
+        CancellationToken cancellationToken = default)
     {
         var filterBuilder = Builders<Itinerary>.Filter;
         var filters = new List<FilterDefinition<Itinerary>>();
@@ -44,34 +45,48 @@ public class ItineraryRepository : MongoRepository<Itinerary>, IItineraryReposit
         var combinedFilter = filters.Count > 0
             ? filterBuilder.And(filters)
             : filterBuilder.Empty;
+        var boundedLimit = Math.Clamp(pageSize, 1, ValidationLimits.MaxPageSize);
 
         return await _collection
             .Find(combinedFilter)
             .SortByDescending(i => i.Date)
             .ThenByDescending(i => i.Id)
-            .Limit(pageSize)
-            .ToListAsync();
+            .Limit(boundedLimit)
+            .ToListAsync(cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task<List<Itinerary>> GetByParticipantAsync(string memberId)
+    public async Task<List<Itinerary>> GetByParticipantAsync(
+        string memberId,
+        int limit,
+        CancellationToken cancellationToken = default)
     {
         var filter = Builders<Itinerary>.Filter
             .ElemMatch(i => i.Participants, p => p.MemberId == memberId);
+        var boundedLimit = Math.Clamp(limit, 1, ValidationLimits.MaxPageSize);
 
         return await _collection
             .Find(filter)
             .SortByDescending(i => i.Date)
-            .ToListAsync();
+            .ThenByDescending(i => i.Id)
+            .Limit(boundedLimit)
+            .ToListAsync(cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task<List<Itinerary>> SearchAsync(string keyword, int limit = 20)
+    public async Task<List<Itinerary>> SearchAsync(
+        string keyword,
+        int limit,
+        CancellationToken cancellationToken = default)
     {
         var filter = Builders<Itinerary>.Filter.Text(keyword);
+        var boundedLimit = Math.Clamp(limit, 1, ValidationLimits.MaxPageSize);
+
         return await _collection
             .Find(filter)
-            .Limit(limit)
-            .ToListAsync();
+            .SortByDescending(i => i.Date)
+            .ThenByDescending(i => i.Id)
+            .Limit(boundedLimit)
+            .ToListAsync(cancellationToken);
     }
 }

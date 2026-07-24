@@ -1,7 +1,11 @@
 using System.Text;
 using System.Text.Json.Serialization;
+using System.Security.Claims;
 using System.Threading.RateLimiting;
 using FamilyPortal.Application.DTOs;
+using FamilyPortal.Application.Interfaces;
+using FamilyPortal.Application.Services;
+using FamilyPortal.Api.Configuration;
 using FamilyPortal.Api.Middleware;
 using FamilyPortal.Infrastructure;
 using FamilyPortal.Infrastructure.Hubs;
@@ -17,6 +21,9 @@ using Microsoft.IdentityModel.Tokens;
 using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
+ProductionSecurityOptions.Validate(builder.Configuration, builder.Environment.EnvironmentName);
+builder.WebHost.ConfigureKestrel(options =>
+    options.Limits.MaxRequestBodySize = 1024 * 1024);
 
 var secureCookies = builder.Configuration.GetValue("SecuritySettings:CookieSecure", true);
 var dataProtectionKeysPath = builder.Configuration["DataProtection:KeysPath"];
@@ -43,6 +50,10 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 // 1. 基礎設施服務註冊 (Infrastructure DI)
 // ─────────────────────────────────────────────
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddScoped<IEventService, EventService>();
+builder.Services.AddScoped<IMemberService, MemberService>();
+builder.Services.AddScoped<IItineraryService, ItineraryService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
 
 // ─────────────────────────────────────────────
 // 2. JWT 認證配置
@@ -123,7 +134,7 @@ builder.Services.AddAntiforgery(options =>
     options.Cookie.SecurePolicy = secureCookies ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest;
 });
 
-builder.Services.AddControllers(options =>
+builder.Services.AddControllersWithViews(options =>
     {
         // Cookie 認證的所有非 GET Controller 請求都必須通過 CSRF 驗證。
         options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute());
@@ -185,11 +196,10 @@ builder.Services.AddOpenApi();
 // ─────────────────────────────────────────────
 builder.Services.AddRateLimiter(options =>
 {
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     options.AddPolicy("fixed", context =>
         RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: context.User.Identity?.Name ??
-                          context.Connection.RemoteIpAddress?.ToString() ??
-                          "unknown",
+            partitionKey: FamilyPortalRateLimitPartition.GetPartitionKey(context),
             factory: _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = 100,
@@ -234,8 +244,8 @@ var app = builder.Build();
 // ─────────────────────────────────────────────
 // Middleware Pipeline 順序（順序很重要！）
 // ─────────────────────────────────────────────
-app.UseMiddleware<ExceptionMiddleware>();
 app.UseForwardedHeaders();
+app.UseMiddleware<ExceptionMiddleware>();
 
 // 開發環境配置
 if (app.Environment.IsDevelopment())
@@ -243,22 +253,12 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi().AllowAnonymous();
 }
 
-// 安全性標頭 Middleware
-app.Use(async (context, next) =>
-{
-    // 防止 XSS
-    context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
-    context.Response.Headers.Append("X-Frame-Options", "DENY");
-    context.Response.Headers.Append("X-XSS-Protection", "1; mode=block");
-    context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
-    context.Response.Headers.Append("Content-Security-Policy", "default-src 'self'");
-    await next();
-});
+app.UseFamilyPortalSecurityHeaders();
 
 app.UseHttpsRedirection();
 app.UseCors("FrontendPolicy");
-app.UseRateLimiter();
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 
 // 路由映射
@@ -278,38 +278,51 @@ app.MapHealthChecks("/health/ready").AllowAnonymous();
 if (!app.Environment.IsEnvironment("Testing"))
 using (var scope = app.Services.CreateScope())
 {
+    var startupCancellationToken = app.Lifetime.ApplicationStopping;
+
     // 建立 MongoDB 索引
     var indexInitializer = scope.ServiceProvider.GetRequiredService<MongoDbIndexInitializer>();
-    await indexInitializer.InitializeAsync();
+    await indexInitializer.InitializeAsync(startupCancellationToken);
 
     // 建立預設 Admin 帳號（如果不存在）
     var userRepo = scope.ServiceProvider.GetRequiredService<FamilyPortal.Application.Interfaces.IUserRepository>();
     var passwordHasher = scope.ServiceProvider.GetRequiredService<FamilyPortal.Application.Interfaces.IPasswordHasher>();
 
-    var adminExists = await userRepo.ExistsAsync(u => u.Role == FamilyPortal.Domain.Enums.UserRole.Admin);
-    if (!adminExists)
+    FamilyPortal.Domain.Entities.User? adminCandidate = null;
+    var adminBootstrapResult = await DefaultAdminBootstrap.EnsureAsync(
+        userRepo,
+        () =>
+        {
+            var defaultAdminUsername = builder.Configuration["DefaultAdmin:Username"] ?? "admin";
+            var defaultAdminEmail = builder.Configuration["DefaultAdmin:Email"] ?? "admin@family.portal";
+            var defaultAdminDisplayName = builder.Configuration["DefaultAdmin:DisplayName"] ?? "許浴宸";
+            var defaultAdminPassword = builder.Configuration["DefaultAdmin:Password"];
+
+            if (string.IsNullOrWhiteSpace(defaultAdminPassword))
+            {
+                throw new InvalidOperationException(
+                    "首次啟動前必須透過環境變數或 User Secrets 設定 DefaultAdmin:Password。");
+            }
+
+            adminCandidate = new FamilyPortal.Domain.Entities.User
+            {
+                Username = defaultAdminUsername,
+                Email = defaultAdminEmail,
+                PasswordHash = passwordHasher.HashPassword(defaultAdminPassword),
+                Role = FamilyPortal.Domain.Enums.UserRole.Admin,
+                DisplayName = defaultAdminDisplayName,
+                IsActive = true
+            };
+            return adminCandidate;
+        },
+        startupCancellationToken);
+    if (adminBootstrapResult == DefaultAdminBootstrapResult.Created)
     {
-        var defaultAdminUsername = builder.Configuration["DefaultAdmin:Username"] ?? "admin";
-        var defaultAdminEmail = builder.Configuration["DefaultAdmin:Email"] ?? "admin@family.portal";
-        var defaultAdminDisplayName = builder.Configuration["DefaultAdmin:DisplayName"] ?? "許浴宸";
-        var defaultAdminPassword = builder.Configuration["DefaultAdmin:Password"];
-
-        if (string.IsNullOrWhiteSpace(defaultAdminPassword))
-        {
-            throw new InvalidOperationException("首次啟動前必須透過環境變數或 User Secrets 設定 DefaultAdmin:Password。");
-        }
-
-        var admin = new FamilyPortal.Domain.Entities.User
-        {
-            Username = defaultAdminUsername,
-            Email = defaultAdminEmail,
-            PasswordHash = passwordHasher.HashPassword(defaultAdminPassword),
-            Role = FamilyPortal.Domain.Enums.UserRole.Admin,
-            DisplayName = defaultAdminDisplayName,
-            IsActive = true
-        };
-        await userRepo.CreateAsync(admin);
-        app.Logger.LogInformation("已建立預設管理員帳號：{UserId}", admin.Id);
+        app.Logger.LogInformation("已建立預設管理員帳號：{UserId}", adminCandidate!.Id);
+    }
+    else
+    {
+        app.Logger.LogInformation("預設管理員已存在，略過建立。");
     }
 }
 
@@ -317,3 +330,42 @@ app.Logger.LogInformation("🏠 Family Portal API 啟動成功！");
 app.Run();
 
 public partial class Program;
+
+/// <summary>建立 API 一般速率限制使用的穩定分區鍵。</summary>
+public static class FamilyPortalRateLimitPartition
+{
+    /// <summary>已驗證使用者使用不可變識別碼，匿名請求則依來源 IP 分區。</summary>
+    /// <param name="context">目前 HTTP request context。</param>
+    /// <returns>速率限制分區鍵。</returns>
+    public static string GetPartitionKey(HttpContext context) =>
+        context.User.FindFirstValue(ClaimTypes.NameIdentifier)
+        ?? context.Connection.RemoteIpAddress?.ToString()
+        ?? "unknown";
+}
+
+/// <summary>設定 Family Portal API 的 HTTP 安全標頭。</summary>
+public static class SecurityHeadersExtensions
+{
+    /// <summary>在非 Development、非 Testing 環境啟用 HSTS，並加入 API 安全標頭。</summary>
+    /// <param name="app">要設定的 Web 應用程式。</param>
+    /// <returns>相同的 Web 應用程式，供 middleware pipeline 串接。</returns>
+    public static WebApplication UseFamilyPortalSecurityHeaders(this WebApplication app)
+    {
+        if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))
+        {
+            app.UseHsts();
+        }
+
+        app.Use(async (context, next) =>
+        {
+            context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            context.Response.Headers["X-Frame-Options"] = "DENY";
+            context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+            context.Response.Headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
+            context.Response.Headers["Cross-Origin-Opener-Policy"] = "same-origin";
+            await next();
+        });
+
+        return app;
+    }
+}

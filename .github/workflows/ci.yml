@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   backend:
     name: Backend
@@ -24,13 +27,38 @@ jobs:
         working-directory: backend
         run: dotnet restore FamilyPortal.slnx
 
+      - name: Audit NuGet dependencies
+        working-directory: backend
+        run: |
+          set -o pipefail
+          dotnet list FamilyPortal.slnx package --vulnerable --include-transitive 2>&1 | tee vulnerable-packages.txt
+          if grep -qE '^[[:space:]]*>[[:space:]]' vulnerable-packages.txt; then
+            exit 1
+          fi
+
       - name: Build
         working-directory: backend
         run: dotnet build FamilyPortal.slnx --no-restore --configuration Release
 
       - name: Test
         working-directory: backend
-        run: dotnet test FamilyPortal.Security.Tests/FamilyPortal.Security.Tests.csproj --no-build --configuration Release --collect:"XPlat Code Coverage"
+        run: >-
+          dotnet test
+          --project FamilyPortal.Security.Tests/FamilyPortal.Security.Tests.csproj
+          --no-build
+          --configuration Release
+          --minimum-expected-tests 150
+          --results-directory FamilyPortal.Security.Tests/TestResults
+          --coverlet
+          --coverlet-output-format cobertura
+
+      - name: Upload backend coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage-cobertura
+          path: backend/FamilyPortal.Security.Tests/TestResults/coverage.cobertura.*.xml
+          if-no-files-found: error
+          retention-days: 30
 
   frontend:
     name: Frontend
@@ -50,12 +78,54 @@ jobs:
 
       - name: Install dependencies
         working-directory: frontend
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Audit production dependencies
+        working-directory: frontend
+        run: pnpm audit:prod
 
       - name: Lint
         working-directory: frontend
         run: pnpm lint
 
+      - name: Test
+        working-directory: frontend
+        run: pnpm test -- --run
+
       - name: Build
         working-directory: frontend
         run: pnpm build
+
+  supply-chain:
+    name: Supply Chain
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Scan repository
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+
+      - name: Generate SBOM
+        if: ${{ !cancelled() }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: cyclonedx
+          output: sbom.cdx.json
+
+      - name: Upload SBOM
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-cyclonedx
+          path: sbom.cdx.json
+          if-no-files-found: error
+          retention-days: 30

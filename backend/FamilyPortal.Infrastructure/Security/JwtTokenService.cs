@@ -26,7 +26,7 @@ public class JwtTokenService : ITokenService
     }
 
     /// <inheritdoc />
-    public string GenerateAccessToken(User user)
+    public GeneratedAccessToken GenerateAccessToken(User user)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.SecretKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -47,15 +47,22 @@ public class JwtTokenService : ITokenService
             new("displayName", user.DisplayName)
         };
 
+        var expiresAt = DateTimeOffset.FromUnixTimeSeconds(
+            DateTimeOffset.UtcNow
+                .AddMinutes(_settings.AccessTokenExpirationMinutes)
+                .ToUnixTimeSeconds())
+            .UtcDateTime;
         var token = new JwtSecurityToken(
             issuer: _settings.Issuer,
             audience: _settings.Audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(_settings.AccessTokenExpirationMinutes),
+            expires: expiresAt,
             signingCredentials: credentials
         );
 
-        return new JwtSecurityTokenHandler().WriteToken(token);
+        return new GeneratedAccessToken(
+            new JwtSecurityTokenHandler().WriteToken(token),
+            expiresAt);
     }
 
     /// <inheritdoc />

@@ -11,50 +11,129 @@ namespace FamilyPortal.Infrastructure.MongoDB;
 /// </summary>
 public class UserRepository : MongoRepository<User>, IUserRepository
 {
+    private const int MaxRefreshTokenHistory = 50;
+
     public UserRepository(MongoDbContext context) : base(context, "Users") { }
 
     /// <inheritdoc />
-    public async Task<User?> GetByUsernameAsync(string username)
+    public async Task<bool> TryCreateAsync(
+        User entity,
+        CancellationToken cancellationToken = default)
     {
-        return await _collection.Find(u => u.Username == username).FirstOrDefaultAsync();
+        entity.CreatedAt = DateTime.UtcNow;
+        entity.UpdatedAt = DateTime.UtcNow;
+
+        return await ExecuteDuplicateSafeInsertAsync(
+            token => _collection.InsertOneAsync(entity, cancellationToken: token),
+            cancellationToken);
+    }
+
+    private static async Task<bool> ExecuteDuplicateSafeInsertAsync(
+        Func<CancellationToken, Task> insert,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await insert(cancellationToken);
+            return true;
+        }
+        catch (MongoWriteException exception)
+            when (exception.WriteError?.Category == ServerErrorCategory.DuplicateKey)
+        {
+            return false;
+        }
     }
 
     /// <inheritdoc />
-    public async Task<User?> GetByEmailAsync(string email)
+    public async Task<User?> GetByUsernameAsync(
+        string username,
+        CancellationToken cancellationToken = default)
     {
-        return await _collection.Find(u => u.Email == email).FirstOrDefaultAsync();
+        return await _collection.Find(u => u.Username == username)
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task<User?> GetByRefreshTokenHashAsync(string tokenHash)
+    public async Task<User?> GetByEmailAsync(
+        string email,
+        CancellationToken cancellationToken = default)
+    {
+        return await _collection.Find(u => u.Email == email)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<User?> GetByRefreshTokenHashAsync(
+        string tokenHash,
+        CancellationToken cancellationToken = default)
     {
         return await _collection.Find(
             Builders<User>.Filter.ElemMatch(
                 user => user.RefreshTokens,
                 token => token.TokenHash == tokenHash))
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task ReplaceRefreshTokensAsync(
+    public async Task AddRefreshTokenAsync(
         string userId,
-        IReadOnlyCollection<RefreshToken> refreshTokens)
+        RefreshToken refreshToken,
+        CancellationToken cancellationToken = default)
     {
-        var update = Builders<User>.Update
-            .Set(u => u.RefreshTokens, refreshTokens.ToList())
-            .Set(u => u.UpdatedAt, DateTime.UtcNow);
+        var now = DateTime.UtcNow;
+        var update = BuildAddRefreshTokenUpdate(refreshToken, now);
 
-        await _collection.UpdateOneAsync(u => u.Id == userId, update);
+        await _collection.UpdateOneAsync(
+            u => u.Id == userId,
+            update,
+            cancellationToken: cancellationToken);
+    }
+
+    private static UpdateDefinition<User> BuildAddRefreshTokenUpdate(
+        RefreshToken refreshToken,
+        DateTime now)
+    {
+        var appendStage = new BsonDocument(
+            "$set",
+            new BsonDocument(
+                "refreshTokens",
+                new BsonDocument(
+                    "$concatArrays",
+                    new BsonArray
+                    {
+                        ExistingRefreshTokens(),
+                        LiteralTokenArray(refreshToken)
+                    })));
+
+        return BuildRefreshTokenPipeline(appendStage, now);
     }
 
     /// <inheritdoc />
     public async Task<bool> RotateRefreshTokenAsync(
         string userId,
         string currentTokenHash,
-        RefreshToken newRefreshToken)
+        RefreshToken newRefreshToken,
+        CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
-        var filter = Builders<User>.Filter.And(
+        var filter = BuildActiveRefreshTokenFilter(userId, currentTokenHash, now);
+        var update = BuildRefreshTokenRotationUpdate(
+            currentTokenHash,
+            newRefreshToken,
+            now);
+
+        var result = await _collection.UpdateOneAsync(
+            filter,
+            update,
+            options: null,
+            cancellationToken: cancellationToken);
+        return result.ModifiedCount == 1;
+    }
+
+    private static FilterDefinition<User> BuildActiveRefreshTokenFilter(
+        string userId,
+        string currentTokenHash,
+        DateTime now) => Builders<User>.Filter.And(
             Builders<User>.Filter.Eq(u => u.Id, userId),
             Builders<User>.Filter.ElemMatch(
                 u => u.RefreshTokens,
@@ -62,18 +141,189 @@ public class UserRepository : MongoRepository<User>, IUserRepository
                          token.RevokedAt == null &&
                          token.ExpiresAt > now));
 
-        var update = Builders<User>.Update
-            .Set("refreshTokens.$.revokedAt", now)
-            .Set("refreshTokens.$.replacedByTokenHash", newRefreshToken.TokenHash)
-            .Push(u => u.RefreshTokens, newRefreshToken)
-            .Set(u => u.UpdatedAt, now);
+    private static UpdateDefinition<User> BuildRefreshTokenRotationUpdate(
+        string currentTokenHash,
+        RefreshToken newRefreshToken,
+        DateTime now)
+    {
+        var mappedTokens = new BsonDocument(
+            "$map",
+            new BsonDocument
+            {
+                { "input", ExistingRefreshTokens() },
+                { "as", "token" },
+                {
+                    "in",
+                    new BsonDocument(
+                        "$cond",
+                        new BsonArray
+                        {
+                            new BsonDocument(
+                                "$eq",
+                                new BsonArray
+                                {
+                                    "$$token.tokenHash",
+                                    Literal(currentTokenHash)
+                                }),
+                            new BsonDocument(
+                                "$mergeObjects",
+                                new BsonArray
+                                {
+                                    "$$token",
+                                    new BsonDocument
+                                    {
+                                        { "revokedAt", new BsonDateTime(now) },
+                                        {
+                                            "replacedByTokenHash",
+                                            Literal(newRefreshToken.TokenHash)
+                                        }
+                                    }
+                                }),
+                            "$$token"
+                        })
+                }
+            });
+        var rotateStage = new BsonDocument(
+            "$set",
+            new BsonDocument(
+                "refreshTokens",
+                new BsonDocument(
+                    "$concatArrays",
+                    new BsonArray
+                    {
+                        mappedTokens,
+                        LiteralTokenArray(newRefreshToken)
+                    })));
 
-        var result = await _collection.UpdateOneAsync(filter, update);
-        return result.ModifiedCount == 1;
+        return BuildRefreshTokenPipeline(rotateStage, now);
     }
 
+    private static UpdateDefinition<User> BuildRefreshTokenPipeline(
+        BsonDocument mutationStage,
+        DateTime now)
+    {
+        PipelineDefinition<User, User> pipeline = new BsonDocument[]
+        {
+            mutationStage,
+            BuildRefreshTokenRetentionStage(now)
+        };
+        return Builders<User>.Update.Pipeline(pipeline);
+    }
+
+    private static BsonDocument BuildRefreshTokenRetentionStage(DateTime now)
+    {
+        var activeTokens = new BsonDocument(
+            "$filter",
+            new BsonDocument
+            {
+                { "input", "$$tokens" },
+                { "as", "token" },
+                { "cond", ActiveTokenCondition(now) }
+            });
+        var inactiveTokens = new BsonDocument(
+            "$filter",
+            new BsonDocument
+            {
+                { "input", "$$tokens" },
+                { "as", "token" },
+                {
+                    "cond",
+                    new BsonDocument(
+                        "$not",
+                        new BsonArray { ActiveTokenCondition(now) })
+                }
+            });
+        var newestInactiveTokens = new BsonDocument(
+            "$slice",
+            new BsonArray
+            {
+                new BsonDocument(
+                    "$sortArray",
+                    new BsonDocument
+                    {
+                        { "input", inactiveTokens },
+                        {
+                            "sortBy",
+                            new BsonDocument
+                            {
+                                { "createdAt", 1 },
+                                { "revokedAt", 1 }
+                            }
+                        }
+                    }),
+                -MaxRefreshTokenHistory
+            });
+
+        return new BsonDocument(
+            "$set",
+            new BsonDocument
+            {
+                {
+                    "refreshTokens",
+                    new BsonDocument(
+                        "$let",
+                        new BsonDocument
+                        {
+                            {
+                                "vars",
+                                new BsonDocument("tokens", ExistingRefreshTokens())
+                            },
+                            {
+                                "in",
+                                new BsonDocument(
+                                    "$concatArrays",
+                                    new BsonArray
+                                    {
+                                        activeTokens,
+                                        newestInactiveTokens
+                                    })
+                            }
+                        })
+                },
+                { "updatedAt", new BsonDateTime(now) }
+            });
+    }
+
+    private static BsonDocument ActiveTokenCondition(DateTime now) =>
+        new(
+            "$and",
+            new BsonArray
+            {
+                new BsonDocument(
+                    "$eq",
+                    new BsonArray
+                    {
+                        new BsonDocument(
+                            "$ifNull",
+                            new BsonArray { "$$token.revokedAt", BsonNull.Value }),
+                        BsonNull.Value
+                    }),
+                new BsonDocument(
+                    "$gt",
+                    new BsonArray
+                    {
+                        "$$token.expiresAt",
+                        new BsonDateTime(now)
+                    })
+            });
+
+    private static BsonDocument ExistingRefreshTokens() =>
+        new("$ifNull", new BsonArray { "$refreshTokens", new BsonArray() });
+
+    private static BsonDocument Literal(string value) =>
+        new("$literal", value);
+
+    private static BsonArray LiteralTokenArray(RefreshToken token) =>
+        new()
+        {
+            new BsonDocument("$literal", token.ToBsonDocument())
+        };
+
     /// <inheritdoc />
-    public async Task RevokeTokenFamilyAsync(string userId, string familyId)
+    public async Task RevokeTokenFamilyAsync(
+        string userId,
+        string familyId,
+        CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
         var filter = Builders<User>.Filter.Eq(u => u.Id, userId);
@@ -93,11 +343,13 @@ public class UserRepository : MongoRepository<User>, IUserRepository
             ]
         };
 
-        await _collection.UpdateOneAsync(filter, update, options);
+        await _collection.UpdateOneAsync(filter, update, options, cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task RevokeAllRefreshTokensAsync(string userId)
+    public async Task RevokeAllRefreshTokensAsync(
+        string userId,
+        CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
         var filter = Builders<User>.Filter.Eq(u => u.Id, userId);
@@ -113,6 +365,6 @@ public class UserRepository : MongoRepository<User>, IUserRepository
             ]
         };
 
-        await _collection.UpdateOneAsync(filter, update, options);
+        await _collection.UpdateOneAsync(filter, update, options, cancellationToken);
     }
 }

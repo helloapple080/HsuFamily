@@ -12,6 +12,9 @@
   <ItemGroup>
     <PackageReference Include="Konscious.Security.Cryptography.Argon2" Version="1.3.1" />
     <PackageReference Include="MongoDB.Driver" Version="3.7.1" />
+    <!-- 覆寫 MongoDB.Driver 的舊版間接壓縮依賴，修補 CVE-2026-44788 與 CVE-2026-44302。 -->
+    <PackageReference Include="SharpCompress" Version="0.48.0" />
+    <PackageReference Include="Snappier" Version="1.3.1" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.21.0" />
     <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.21.0" />
   </ItemGroup>

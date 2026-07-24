@@ -10,7 +10,7 @@ interface RetryableRequestConfig extends InternalAxiosRequestConfig {
   _retry?: boolean
 }
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'
+export const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? ''
 const unsafeMethods = new Set(['post', 'put', 'patch', 'delete'])
 
 /// 不含攔截器的 Client，避免取得 CSRF Token 或 refresh 時遞迴。

@@ -20,61 +20,73 @@ public class MongoRepository<T> : IRepository<T> where T : BaseEntity
     }
 
     /// <inheritdoc />
-    public async Task<T?> GetByIdAsync(string id)
+    public async Task<T?> GetByIdAsync(string id, CancellationToken cancellationToken = default)
     {
-        return await _collection.Find(x => x.Id == id).FirstOrDefaultAsync();
+        return await _collection.Find(x => x.Id == id).FirstOrDefaultAsync(cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task<List<T>> GetAllAsync()
+    public async Task<List<T>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        return await _collection.Find(_ => true).ToListAsync();
+        return await _collection.Find(_ => true).ToListAsync(cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task<List<T>> FindAsync(Expression<Func<T, bool>> filter)
+    public async Task<List<T>> FindAsync(
+        Expression<Func<T, bool>> filter,
+        CancellationToken cancellationToken = default)
     {
-        return await _collection.Find(filter).ToListAsync();
+        return await _collection.Find(filter).ToListAsync(cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task<T?> FindOneAsync(Expression<Func<T, bool>> filter)
+    public async Task<T?> FindOneAsync(
+        Expression<Func<T, bool>> filter,
+        CancellationToken cancellationToken = default)
     {
-        return await _collection.Find(filter).FirstOrDefaultAsync();
+        return await _collection.Find(filter).FirstOrDefaultAsync(cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task CreateAsync(T entity)
+    public async Task CreateAsync(T entity, CancellationToken cancellationToken = default)
     {
         entity.CreatedAt = DateTime.UtcNow;
         entity.UpdatedAt = DateTime.UtcNow;
-        await _collection.InsertOneAsync(entity);
+        await _collection.InsertOneAsync(entity, cancellationToken: cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task UpdateAsync(string id, T entity)
+    public async Task UpdateAsync(string id, T entity, CancellationToken cancellationToken = default)
     {
         entity.UpdatedAt = DateTime.UtcNow;
-        await _collection.ReplaceOneAsync(x => x.Id == id, entity);
+        await _collection.ReplaceOneAsync(
+            x => x.Id == id,
+            entity,
+            options: new ReplaceOptions(),
+            cancellationToken: cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task DeleteAsync(string id)
+    public async Task DeleteAsync(string id, CancellationToken cancellationToken = default)
     {
-        await _collection.DeleteOneAsync(x => x.Id == id);
+        await _collection.DeleteOneAsync(x => x.Id == id, cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task<bool> ExistsAsync(Expression<Func<T, bool>> filter)
+    public async Task<bool> ExistsAsync(
+        Expression<Func<T, bool>> filter,
+        CancellationToken cancellationToken = default)
     {
-        return await _collection.Find(filter).AnyAsync();
+        return await _collection.Find(filter).AnyAsync(cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task<long> CountAsync(Expression<Func<T, bool>>? filter = null)
+    public async Task<long> CountAsync(
+        Expression<Func<T, bool>>? filter = null,
+        CancellationToken cancellationToken = default)
     {
         return filter == null
-            ? await _collection.CountDocumentsAsync(_ => true)
-            : await _collection.CountDocumentsAsync(filter);
+            ? await _collection.CountDocumentsAsync(_ => true, cancellationToken: cancellationToken)
+            : await _collection.CountDocumentsAsync(filter, cancellationToken: cancellationToken);
     }
 }

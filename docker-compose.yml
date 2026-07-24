@@ -16,7 +16,7 @@ services:
     networks:
       - family-portal-network
     healthcheck:
-      test: ["CMD-SHELL", "mongosh --quiet --username familyportal_root --password '$$MONGO_INITDB_ROOT_PASSWORD' --authenticationDatabase admin --eval \"db.adminCommand('ping').ok\" | grep 1"]
+      test: ["CMD-SHELL", "mongosh --quiet --username familyportal_root --password \"$$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --eval \"db.adminCommand('ping').ok\" | grep 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -30,7 +30,7 @@ services:
       MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD:?MONGO_APP_PASSWORD is required}
     volumes:
       - ./backend/scripts/ensure-app-user.js:/scripts/ensure-app-user.js:ro
-    command: ["mongosh", "mongodb://familyportal_root:$${MONGO_ROOT_PASSWORD}@mongodb:27017/admin", "--file", "/scripts/ensure-app-user.js"]
+    command: ["sh", "-c", "exec mongosh --host mongodb --port 27017 --username familyportal_root --password \"$$MONGO_ROOT_PASSWORD\" --authenticationDatabase admin --file /scripts/ensure-app-user.js"]
     depends_on:
       mongodb:
         condition: service_healthy
@@ -45,7 +45,7 @@ services:
     container_name: family-portal-api
     restart: unless-stopped
     environment:
-      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:5001
       MongoDbSettings__ConnectionString: mongodb://familyportal_app:${MONGO_APP_PASSWORD:?MONGO_APP_PASSWORD is required}@mongodb:27017/FamilyPortal?authSource=FamilyPortal
       MongoDbSettings__DatabaseName: FamilyPortal
@@ -58,13 +58,14 @@ services:
       DefaultAdmin__Email: ${ADMIN_EMAIL:-admin@family.portal}
       DefaultAdmin__DisplayName: ${ADMIN_DISPLAY_NAME:-許浴宸}
       DefaultAdmin__Password: ${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
-      SecuritySettings__CookieSecure: ${COOKIE_SECURE:-false}
+      SecuritySettings__CookieSecure: "false"
+      AllowedOrigins__0: http://localhost:3000
       DataProtection__KeysPath: /app/keys
       AllowedHosts: ${ALLOWED_HOSTS:-localhost;127.0.0.1}
     volumes:
       - data_protection_keys:/app/keys
     ports:
-      - "5001:5001"
+      - "127.0.0.1:5001:5001"
     depends_on:
       mongodb-user-init:
         condition: service_completed_successfully
@@ -83,11 +84,11 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5001}
+        NEXT_PUBLIC_API_URL: http://localhost:5001
     container_name: family-portal-frontend
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       - backend
     networks:

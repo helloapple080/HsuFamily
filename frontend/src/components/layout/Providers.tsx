@@ -9,6 +9,8 @@ import api from '@/lib/api'
 import { useAuthStore } from '@/stores/authStore'
 import type { ApiResponse } from '@/types/api'
 import type { UserInfo } from '@/types/auth'
+import { shouldRetryQuery } from '@/lib/queryRetry'
+import { MotionConfig } from 'framer-motion'
 
 interface ProvidersProps {
   children: React.ReactNode
@@ -24,7 +26,7 @@ export default function Providers({ children }: ProvidersProps) {
         defaultOptions: {
           queries: {
             staleTime: 60 * 1000, // 1 分鐘內資料視為新鮮
-            retry: 2,
+            retry: shouldRetryQuery,
             refetchOnWindowFocus: false,
           },
         },
@@ -59,8 +61,10 @@ export default function Providers({ children }: ProvidersProps) {
         enableSystem
         disableTransitionOnChange
       >
-        {children}
-        <Toaster richColors position="top-right" />
+        <MotionConfig reducedMotion="user">
+          {children}
+          <Toaster richColors position="top-right" />
+        </MotionConfig>
       </ThemeProvider>
     </QueryClientProvider>
   )

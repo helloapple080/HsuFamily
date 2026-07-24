@@ -1,4 +1,5 @@
 using FamilyPortal.Application.Interfaces;
+using FamilyPortal.Infrastructure.Hubs;
 using FamilyPortal.Infrastructure.MongoDB;
 using FamilyPortal.Infrastructure.Security;
 using Microsoft.Extensions.Configuration;
@@ -27,6 +28,7 @@ public static class DependencyInjection
         services.AddScoped<IMemberRepository, MemberRepository>();
         services.AddScoped<IEventRepository, EventRepository>();
         services.AddScoped<IItineraryRepository, ItineraryRepository>();
+        services.AddScoped<ICalendarNotifier, SignalRCalendarNotifier>();
 
         // Security Services
         services.Configure<JwtSettings>(
