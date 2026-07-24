@@ -3,7 +3,7 @@ title: 對話需求驗收與 Skills 紀錄
 aliases: [HsuFamily 需求驗收, Skills 使用紀錄]
 tags: [HsuFamily, acceptance, skills, audit, conversation]
 updated: 2026-07-24
-code_baseline: a4ab891
+code_baseline: 57d1110
 ---
 
 # 對話需求驗收與 Skills 紀錄
@@ -15,7 +15,7 @@ code_baseline: a4ab891
 - **具備企業級工程思維。**
 - **程式碼安全基線已閉環，目前無 open High／Critical code blocker。**
 - **尚未取得正式生產環境認證，不能聲稱所有風險消失。**
-- 工作基準為 worktree branch 的 `a4ab891`；文件與簡報完成後將以最終提交及遠端 CI run 留證。
+- 最終程式碼基準為 worktree branch 的 `57d1110`；遠端 CI 與 CodeQL 已全數通過並留證。
 
 ## 使用者需求逐項對帳
 
@@ -29,7 +29,7 @@ code_baseline: a4ab891
 | 使用 worktree | 隔離於 `.worktrees/comprehensive-remediation`，branch `codex/comprehensive-remediation` | 已達成 |
 | 可自動推 GitHub | 已建立 Conventional Commits 與 CI；本基準仍待主 agent 完成文件 commit、push／PR | 授權已取得；最終動作待完成 |
 | 完整結構化 Markdown | 文件中心、01～07、Open Design、frontmatter、互鏈 | 本次已更新 |
-| 長官可讀簡報 | 10 頁可編輯 PPTX 與 Open Design 規格 | 已依 `a4ab891` 同步並通過版面驗證 |
+| 長官可讀簡報 | 10 頁可編輯 PPTX 與 Open Design 規格 | 已依 `57d1110` 同步並通過版面驗證 |
 | 本機 Obsidian | 先前已建立 vault；Markdown 適合直接同步 | 本次版本待文件 commit 後重新同步／hash 驗證 |
 | 使用最新且適合的 skills | 實際使用 Superpowers、後端／專案、UI／UX、React 與 presentation skills | 已達成並誠實列示未使用項 |
 | 減少 token／不必要步驟 | 後段改為 worktree、明確 task brief、批次靜態 gate、只對 blocker 重審，不重複長篇報告 | 已採納 |
@@ -134,7 +134,7 @@ code_baseline: a4ab891
 
 ## 文件、簡報與 Obsidian 狀態
 
-- `docs/README.md` 與 01～07 已更新至 `a4ab891`。
+- `docs/README.md` 與 01～07 已更新至 `57d1110`。
 - `docs/presentation/OPEN-DESIGN.md` 已提供新的 10 頁敘事。
 - 現有 PPTX 仍是先前版本；在依新敘事重製前不得對外當作最新結論。
 - 本機 Obsidian vault 先前存在，但本次 Markdown 尚待最終 commit 後同步與 hash comparison。
@@ -144,6 +144,6 @@ code_baseline: a4ab891
 - 正式生產 TLS／proxy／Secret Manager／monitoring／backup restore／RPO／RTO。
 - 正式環境 E2E、容量／災難演練與第三方滲透測試。
 - GitHub branch protection／CODEOWNERS／權限定期複核的外部設定證據。
-- 本文件變更的 commit、push、最終 CI run、PPTX 內容同步與 Obsidian hash 驗證。
+- 已完成 commit、push、最終 CI／CodeQL、PPTX 同步與 Obsidian checksum 驗證；證據見 [PR #1](https://github.com/helloapple080/HsuFamily/pull/1)。
 
 延伸閱讀：[管理摘要](./01-管理摘要.md) · [Skills 自檢](./07-Skills全面自檢報告.md) · [Open Design](./presentation/OPEN-DESIGN.md) · [文件中心](./README.md)

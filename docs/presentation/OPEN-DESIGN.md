@@ -3,7 +3,7 @@ title: 許氏入口網企業級工程簡報 Open Design
 aliases: [HsuFamily Open Design, 長官簡報規格]
 tags: [HsuFamily, presentation, open-design, governance]
 updated: 2026-07-24
-code_baseline: a4ab891
+code_baseline: 57d1110
 pptx_sync: complete
 ---
 
@@ -11,7 +11,7 @@ pptx_sync: complete
 
 ## 文件狀態
 
-本檔是 `a4ab891` 的最新簡報敘事 source of truth。[HsuFamily-Enterprise-Readiness.pptx](./HsuFamily-Enterprise-Readiness.pptx) 為 10 頁可編輯簡報，已依本基準重製並通過逐頁渲染、overflow 與 template fidelity 驗證；內容仍明確標示尚未取得正式生產認證。
+本檔是 `57d1110` 的最新簡報敘事 source of truth。[HsuFamily-Enterprise-Readiness.pptx](./HsuFamily-Enterprise-Readiness.pptx) 為 10 頁可編輯簡報，已依本基準重製並通過逐頁渲染、overflow 與 template fidelity 驗證；內容仍明確標示尚未取得正式生產認證。
 
 簡報以 GitHub Primer 的開源產品語彙為靈感，隨專案採 MIT License，可編輯與再利用。
 
@@ -66,7 +66,7 @@ pptx_sync: complete
 
 | 證據 | 表述 |
 |---|---|
-| 程式碼基準 | `a4ab891`（文件 commit 完成後另補最終 SHA） |
+| 程式碼基準 | `57d1110` |
 | Backend | `158/158`；CI minimum expected tests `150` |
 | Frontend | `54/54`；ESLint／Next production build PASS |
 | Runtime | SDK `10.0.302`；ASP.NET Core／.NET `10.0.10` |

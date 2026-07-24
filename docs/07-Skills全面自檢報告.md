@@ -3,14 +3,14 @@ title: 許氏入口網 Skills 全面自檢報告
 aliases: [HsuFamily Skills Audit, 全面自檢報告]
 tags: [HsuFamily, audit, security, architecture, uiux, skills]
 updated: 2026-07-24
-code_baseline: a4ab891
+code_baseline: 57d1110
 ---
 
 # 許氏入口網 Skills 全面自檢報告
 
 ## 管理結論
 
-專案已具備**企業級工程思維**，且截至 `a4ab891` 的已知程式碼 Critical／High 安全基線已閉環。先前自檢列出的 Next.js、Axios 與 production deployment blockers 均已修復，不能再列為 open。
+專案已具備**企業級工程思維**，且截至 `57d1110` 的已知程式碼 Critical／High 安全基線已閉環。先前自檢列出的 Next.js、Axios、PostCSS 與 production deployment blockers 均已修復，不能再列為 open。
 
 這仍不是正式生產認證。正式 DNS／TLS／proxy、Secret Manager、監控告警、備份還原、RPO／RTO、組織權限與獨立安全測試尚未在實際環境取得證據。
 

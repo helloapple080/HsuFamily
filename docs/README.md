@@ -3,14 +3,14 @@ title: 許氏入口網文件中心
 aliases: [HsuFamily 文件中心, 許氏入口網知識庫]
 tags: [HsuFamily, documentation, Obsidian, governance]
 updated: 2026-07-24
-code_baseline: a4ab891
+code_baseline: 57d1110
 ---
 
 # 許氏入口網文件中心
 
 ## 基準結論
 
-截至程式碼基準 `a4ab891`，本專案已具備**企業級工程思維**，且已知的程式碼 Critical／High 安全基線已完成修復與回歸驗證。這代表架構、安全、測試、供應鏈與部署設定已有可持續執行的閉環；不代表已取得正式生產環境、法遵或第三方資安認證。
+截至程式碼基準 `57d1110`，本專案已具備**企業級工程思維**，且已知的程式碼 Critical／High 安全基線已完成修復與回歸驗證。這代表架構、安全、測試、供應鏈與部署設定已有可持續執行的閉環；不代表已取得正式生產環境、法遵或第三方資安認證。
 
 目前沒有仍開啟的程式碼 High／Critical release blocker。剩餘項目主要是正式 TLS／DNS／proxy、Secret Manager、監控告警、備份還原、RPO／RTO、事故演練、權限治理與獨立滲透測試等**環境及治理風險**。
 
@@ -25,6 +25,7 @@ code_baseline: a4ab891
 | NuGet | 5 個 projects 未發現已知 vulnerable package |
 | pnpm production audit | Critical `0`、High `0`；剩餘 Low `1` |
 | 供應鏈 | CodeQL、Trivy High/Critical gate、CycloneDX SBOM、Dependabot 已納入 repository |
+| 遠端證據 | [CI run 30112837936](https://github.com/helloapple080/HsuFamily/actions/runs/30112837936) 與 [CodeQL run 30112838098](https://github.com/helloapple080/HsuFamily/actions/runs/30112838098) 全數通過 |
 
 > 測試通過與依賴掃描是程式碼證據；正式上線仍需完成 [部署與維運手冊](./04-部署與維運手冊.md) 的環境驗收。
 
