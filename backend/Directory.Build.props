@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- 排除 macOS 在外接磁碟產生的 AppleDouble metadata，避免被 SDK 預設 glob 當成原始碼。 -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);**/._*</DefaultItemExcludes>
+  </PropertyGroup>
+</Project>

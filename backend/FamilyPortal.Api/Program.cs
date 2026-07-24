@@ -134,7 +134,7 @@ builder.Services.AddAntiforgery(options =>
     options.Cookie.SecurePolicy = secureCookies ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest;
 });
 
-builder.Services.AddControllers(options =>
+builder.Services.AddControllersWithViews(options =>
     {
         // Cookie 認證的所有非 GET Controller 請求都必須通過 CSRF 驗證。
         options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute());

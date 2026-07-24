@@ -62,7 +62,7 @@ public class MongoRepository<T> : IRepository<T> where T : BaseEntity
         await _collection.ReplaceOneAsync(
             x => x.Id == id,
             entity,
-            options: null,
+            options: new ReplaceOptions(),
             cancellationToken: cancellationToken);
     }
 

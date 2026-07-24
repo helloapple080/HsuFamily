@@ -28,8 +28,9 @@ public sealed class ValidationBoundaryTests
             .Single(item => item.ParameterType == typeof(EventRangeRequest));
         Assert.Equal(typeof(EventRangeRequest), parameter.ParameterType);
         Assert.NotNull(parameter.GetCustomAttribute<FromQueryAttribute>());
-        Assert.True(method.GetParameters()
-            .Any(item => item.ParameterType == typeof(CancellationToken)));
+        Assert.Contains(
+            method.GetParameters(),
+            item => item.ParameterType == typeof(CancellationToken));
     }
 
     /// <summary>Request DTO 不得直接公開 Domain 巢狀值物件，Response DTO 則維持既有 shape。</summary>

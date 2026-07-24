@@ -148,6 +148,6 @@ public sealed class RefreshTokenHistoryTests
             methodName,
             BindingFlags.Static | BindingFlags.NonPublic);
         Assert.NotNull(method);
-        return Assert.IsType<T>(method.Invoke(null, arguments));
+        return Assert.IsAssignableFrom<T>(method.Invoke(null, arguments));
     }
 }

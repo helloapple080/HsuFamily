@@ -151,7 +151,9 @@ public sealed class AdminBootstrapTests
     {
         var exception = MongoWriteError(ServerErrorCategory.DuplicateKey);
 
-        var created = await ExecuteDuplicateSafeInsertAsync(_ => Task.FromException(exception));
+        var created = await ExecuteDuplicateSafeInsertAsync(
+            _ => Task.FromException(exception),
+            TestContext.Current.CancellationToken);
 
         Assert.False(created);
     }
@@ -163,7 +165,9 @@ public sealed class AdminBootstrapTests
         var expected = MongoWriteError(ServerErrorCategory.Uncategorized);
 
         var actual = await Assert.ThrowsAsync<MongoWriteException>(() =>
-            ExecuteDuplicateSafeInsertAsync(_ => Task.FromException(expected)));
+            ExecuteDuplicateSafeInsertAsync(
+                _ => Task.FromException(expected),
+                TestContext.Current.CancellationToken));
 
         Assert.Same(expected, actual);
     }
@@ -175,7 +179,9 @@ public sealed class AdminBootstrapTests
         var expected = new InvalidDataException("insert failed");
 
         var actual = await Assert.ThrowsAsync<InvalidDataException>(() =>
-            ExecuteDuplicateSafeInsertAsync(_ => Task.FromException(expected)));
+            ExecuteDuplicateSafeInsertAsync(
+                _ => Task.FromException(expected),
+                TestContext.Current.CancellationToken));
 
         Assert.Same(expected, actual);
     }

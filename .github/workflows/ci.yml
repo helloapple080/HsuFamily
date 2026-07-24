@@ -42,7 +42,23 @@ jobs:
 
       - name: Test
         working-directory: backend
-        run: dotnet test FamilyPortal.Security.Tests/FamilyPortal.Security.Tests.csproj --no-build --configuration Release --collect:"XPlat Code Coverage"
+        run: >-
+          dotnet test
+          --project FamilyPortal.Security.Tests/FamilyPortal.Security.Tests.csproj
+          --no-build
+          --configuration Release
+          --minimum-expected-tests 150
+          --results-directory FamilyPortal.Security.Tests/TestResults
+          --coverlet
+          --coverlet-output-format cobertura
+
+      - name: Upload backend coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage-cobertura
+          path: backend/FamilyPortal.Security.Tests/TestResults/coverage.cobertura.*.xml
+          if-no-files-found: error
+          retention-days: 30
 
   frontend:
     name: Frontend

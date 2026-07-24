@@ -92,6 +92,7 @@ public sealed class ApiSecurityIntegrationTests : IClassFixture<ApiSecurityInteg
         {
             EnvironmentName = Environments.Production
         });
+        builder.Configuration["AllowedHosts"] = "family.example";
         builder.WebHost.UseTestServer();
 
         await using var app = builder.Build();
@@ -118,6 +119,7 @@ public sealed class ApiSecurityIntegrationTests : IClassFixture<ApiSecurityInteg
         {
             EnvironmentName = environmentName
         });
+        builder.Configuration["AllowedHosts"] = "family.example";
         builder.WebHost.UseTestServer();
 
         await using var app = builder.Build();
@@ -199,7 +201,7 @@ public sealed class ApiSecurityIntegrationTests : IClassFixture<ApiSecurityInteg
                 {
                     ["JwtSettings:SecretKey"] = "Integration-Test-Secret-Key-Must-Be-At-Least-32-Characters!",
                     ["SecuritySettings:CookieSecure"] = "false",
-                    ["MongoDbSettings:ConnectionString"] = "mongodb://127.0.0.1:27017",
+                    ["MongoDbSettings:ConnectionString"] = "mongodb://127.0.0.1:27017/?serverSelectionTimeoutMS=200&connectTimeoutMS=200",
                     ["MongoDbSettings:DatabaseName"] = "FamilyPortal_Test"
                 });
             });
