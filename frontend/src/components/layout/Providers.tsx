@@ -10,6 +10,7 @@ import { useAuthStore } from '@/stores/authStore'
 import type { ApiResponse } from '@/types/api'
 import type { UserInfo } from '@/types/auth'
 import { shouldRetryQuery } from '@/lib/queryRetry'
+import { MotionConfig } from 'framer-motion'
 
 interface ProvidersProps {
   children: React.ReactNode
@@ -60,8 +61,10 @@ export default function Providers({ children }: ProvidersProps) {
         enableSystem
         disableTransitionOnChange
       >
-        {children}
-        <Toaster richColors position="top-right" />
+        <MotionConfig reducedMotion="user">
+          {children}
+          <Toaster richColors position="top-right" />
+        </MotionConfig>
       </ThemeProvider>
     </QueryClientProvider>
   )

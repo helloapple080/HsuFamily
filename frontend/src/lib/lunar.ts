@@ -108,6 +108,7 @@ export function getMonthLunarInfo(year: number, month: number) {
       solarDate: `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`,
       lunarMonth: lunarMonths[lunarMonth - 1],
       lunarDay: lunarDays[lunar.getDay() - 1],
+      isLeapMonth: lunar.getMonth() < 0,
       // 每月初一顯示月份，其餘顯示日
       displayText: lunar.getDay() === 1
         ? `${lunar.getMonth() < 0 ? '閏' : ''}${lunarMonths[lunarMonth - 1]}月`
