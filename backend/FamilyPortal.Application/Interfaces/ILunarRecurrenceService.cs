@@ -15,6 +15,7 @@ public interface ILunarRecurrenceService
     /// <param name="rangeEnd">含尾的 UTC 查詢結束。</param>
     /// <param name="cancellationToken">取消作業的權杖。</param>
     /// <returns>依國曆日期與穩定識別碼排序的 occurrence 清單。</returns>
+    /// <exception cref="ArgumentException">查詢範圍或規則生效起訖不是 UTC，或查詢範圍反轉。</exception>
     Task<IReadOnlyList<LunarOccurrence>> ExpandAsync(
         DomainEvent rule,
         DateTime rangeStart,

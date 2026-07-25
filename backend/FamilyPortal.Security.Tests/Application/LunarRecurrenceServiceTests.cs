@@ -1,3 +1,4 @@
+using System.Globalization;
 using FamilyPortal.Application.Interfaces;
 using FamilyPortal.Domain.Enums;
 using FamilyPortal.Domain.ValueObjects;
@@ -45,6 +46,29 @@ public sealed class LunarRecurrenceServiceTests
         Assert.Equal(8, occurrence.LunarMonth);
         Assert.Equal(15, occurrence.LunarDay);
         Assert.False(occurrence.IsLeapMonth);
+    }
+
+    /// <summary>穩定識別碼的國曆日期不應受非 Gregorian 文化曆法影響。</summary>
+    [Fact]
+    public async Task ExpandAsync_StableIdUsesInvariantGregorianDate()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("th-TH");
+
+            var result = await service.ExpandAsync(
+                YearlyRule(8, 15),
+                Utc(2026, 1, 1),
+                Utc(2026, 12, 31, 23, 59, 59),
+                CancellationToken.None);
+
+            Assert.Equal("event-rule:2026-09-25", Assert.Single(result).Id);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+        }
     }
 
     /// <summary>閏六月規則應依策略只產生一般月、閏月或兩者。</summary>
@@ -104,6 +128,68 @@ public sealed class LunarRecurrenceServiceTests
             result.Select(occurrence => (occurrence.LunarMonth, occurrence.LunarDay)));
     }
 
+    /// <summary>月間隔的實際農曆月序應將 2025 閏六月計為一個月份。</summary>
+    [Fact]
+    public async Task ExpandAsync_LunarMonthlyIntervalCountsLeapMonthInSequence()
+    {
+        var rule = MonthlyRule(
+            interval: 2,
+            lunarDays: [1],
+            lunarYear: 2025,
+            lunarMonth: 5,
+            leapMonthPolicy: LeapMonthPolicy.Both);
+
+        var result = await service.ExpandAsync(
+            rule,
+            Utc(2025, 5, 27),
+            Utc(2025, 9, 30, 23, 59, 59),
+            CancellationToken.None);
+
+        Assert.Equal(
+            ["2025-05-27", "2025-07-25", "2025-09-22"],
+            result.Select(occurrence => occurrence.SolarDate.ToString(
+                "yyyy-MM-dd",
+                CultureInfo.InvariantCulture)));
+        Assert.Equal(
+            [(5, false), (6, true), (8, false)],
+            result.Select(occurrence => (occurrence.LunarMonth, occurrence.IsLeapMonth)));
+    }
+
+    /// <summary>農曆每月規則應在閏月層級套用 LeapOnly 與 Both 策略。</summary>
+    /// <param name="policy">閏月發生策略。</param>
+    /// <param name="expectedDates">預期國曆日期。</param>
+    /// <param name="expectedLeapFlags">預期閏月標記。</param>
+    [Theory]
+    [InlineData(LeapMonthPolicy.LeapOnly, "2025-07-25", "true")]
+    [InlineData(LeapMonthPolicy.Both, "2025-06-25,2025-07-25,2025-08-23", "false,true,false")]
+    public async Task ExpandAsync_LunarMonthlyAppliesLeapMonthPolicy(
+        LeapMonthPolicy policy,
+        string expectedDates,
+        string expectedLeapFlags)
+    {
+        var rule = MonthlyRule(
+            interval: 1,
+            lunarDays: [1],
+            lunarYear: 2025,
+            lunarMonth: 6,
+            leapMonthPolicy: policy);
+
+        var result = await service.ExpandAsync(
+            rule,
+            Utc(2025, 6, 25),
+            Utc(2025, 8, 23, 23, 59, 59),
+            CancellationToken.None);
+
+        Assert.Equal(
+            expectedDates.Split(','),
+            result.Select(occurrence => occurrence.SolarDate.ToString(
+                "yyyy-MM-dd",
+                CultureInfo.InvariantCulture)));
+        Assert.Equal(
+            expectedLeapFlags.Split(',').Select(bool.Parse),
+            result.Select(occurrence => occurrence.IsLeapMonth));
+    }
+
     /// <summary>農曆每年規則應從來源農曆年開始套用年間隔。</summary>
     [Fact]
     public async Task ExpandAsync_LunarYearlyAnchorsIntervalToSourceLunarYear()
@@ -136,6 +222,38 @@ public sealed class LunarRecurrenceServiceTests
 
         var occurrence = Assert.Single(result);
         Assert.Equal(Utc(2026, 9, 25), occurrence.SolarDate);
+    }
+
+    /// <summary>生效起訖若非 UTC 應在服務邊界直接拒絕。</summary>
+    /// <param name="setsEffectiveFrom">是否設定非 UTC 的生效日期；否則設定結束日期。</param>
+    /// <param name="kind">無效的 DateTimeKind。</param>
+    [Theory]
+    [InlineData(true, DateTimeKind.Local)]
+    [InlineData(true, DateTimeKind.Unspecified)]
+    [InlineData(false, DateTimeKind.Local)]
+    [InlineData(false, DateTimeKind.Unspecified)]
+    public async Task ExpandAsync_RejectsNonUtcEffectiveBounds(
+        bool setsEffectiveFrom,
+        DateTimeKind kind)
+    {
+        var rule = YearlyRule(8, 15);
+        var invalidBound = DateTime.SpecifyKind(new DateTime(2026, 9, 25), kind);
+        if (setsEffectiveFrom)
+        {
+            rule.RecurrenceRule!.EffectiveFrom = invalidBound;
+        }
+        else
+        {
+            rule.RecurrenceRule!.EffectiveUntil = invalidBound;
+        }
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => service.ExpandAsync(
+            rule,
+            Utc(2026, 1, 1),
+            Utc(2026, 12, 31, 23, 59, 59),
+            CancellationToken.None));
+
+        Assert.Equal("rule", exception.ParamName);
     }
 
     /// <summary>國曆日期不在查詢範圍時應排除 occurrence。</summary>
@@ -247,22 +365,29 @@ public sealed class LunarRecurrenceServiceTests
             }
         };
 
-    private static DomainEvent MonthlyRule(int interval, List<int> lunarDays) => new()
+    private static DomainEvent MonthlyRule(
+        int interval,
+        List<int> lunarDays,
+        int lunarYear = 2026,
+        int lunarMonth = 1,
+        bool isLeapMonth = false,
+        LeapMonthPolicy leapMonthPolicy = LeapMonthPolicy.RegularOnly) => new()
     {
         Id = "event-rule",
         IsLunarDate = true,
         LunarDate = new LunarDate
         {
-            Year = 2026,
-            Month = 1,
-            Day = 1
+            Year = lunarYear,
+            Month = lunarMonth,
+            Day = 1,
+            IsLeapMonth = isLeapMonth
         },
         RecurrenceRule = new RecurrenceRule
         {
             Type = RecurrenceType.LunarMonthly,
             Interval = interval,
             LunarDays = lunarDays,
-            LeapMonthPolicy = LeapMonthPolicy.RegularOnly
+            LeapMonthPolicy = leapMonthPolicy
         }
     };
 

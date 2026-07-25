@@ -26,6 +26,7 @@ public sealed class LunarRecurrenceService : ILunarRecurrenceService
             return Task.FromResult<IReadOnlyList<LunarOccurrence>>([]);
         }
 
+        EnsureUtcEffectiveBounds(recurrenceRule, nameof(rule));
         var effectiveStart = recurrenceRule.EffectiveFrom is { } effectiveFrom
             ? Max(rangeStart, AsUtcDate(effectiveFrom))
             : rangeStart;
@@ -278,7 +279,7 @@ public sealed class LunarRecurrenceService : ILunarRecurrenceService
 
         occurrences.Add(new LunarOccurrence
         {
-            Id = $"{ruleId}:{solarDate:yyyy-MM-dd}",
+            Id = $"{ruleId}:{solarDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}",
             SourceRuleId = ruleId,
             SolarDate = solarDate,
             LunarYear = lunarYear,
@@ -363,6 +364,19 @@ public sealed class LunarRecurrenceService : ILunarRecurrenceService
         if (rangeEnd < rangeStart)
         {
             throw new ArgumentException("查詢結束不可早於開始。", nameof(rangeEnd));
+        }
+    }
+
+    private static void EnsureUtcEffectiveBounds(RecurrenceRule recurrenceRule, string parameterName)
+    {
+        if (recurrenceRule.EffectiveFrom is { Kind: not DateTimeKind.Utc })
+        {
+            throw new ArgumentException("規則生效日期必須使用 UTC。", parameterName);
+        }
+
+        if (recurrenceRule.EffectiveUntil is { Kind: not DateTimeKind.Utc })
+        {
+            throw new ArgumentException("規則結束日期必須使用 UTC。", parameterName);
         }
     }
 }
