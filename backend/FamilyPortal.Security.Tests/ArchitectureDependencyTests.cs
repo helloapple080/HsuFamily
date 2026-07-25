@@ -1,6 +1,14 @@
 using System.Collections.Generic;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using FamilyPortal.Application.Interfaces;
+using FamilyPortal.Domain.Entities;
+using FamilyPortal.Domain.Enums;
+using FamilyPortal.Infrastructure.MongoDB;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
+using MongoDB.Driver;
 using Xunit;
 
 namespace FamilyPortal.Security.Tests;
@@ -17,6 +25,165 @@ public sealed class ArchitectureDependencyTests
         int QuoteLength,
         bool IsVerbatim,
         int DollarCount);
+
+    /// <summary>媒體 Domain 不得引用任何 Google 命名空間或套件。</summary>
+    [Fact]
+    public void MediaDomain_MustNotReferenceGoogleNamespaces()
+    {
+        var domainFiles = Directory.GetFiles(
+                DomainSourcePath(),
+                "*.cs",
+                SearchOption.AllDirectories)
+            .Where(file => !Path.GetFileName(file).StartsWith("._", StringComparison.Ordinal));
+
+        foreach (var file in domainFiles)
+        {
+            var source = File.ReadAllText(file);
+
+            Assert.DoesNotMatch(
+                new Regex(@"^\s*(?:global\s+)?using\s+Google(?:\.|;)", RegexOptions.Multiline),
+                source);
+        }
+    }
+
+    /// <summary>媒體列舉欄位必須使用字串格式寫入 MongoDB。</summary>
+    [Fact]
+    public void MediaAsset_EnumFields_SerializeAsStrings()
+    {
+        var asset = new MediaAsset
+        {
+            Visibility = MediaVisibility.FamilyOnly,
+            Purpose = MediaPurpose.MemberAvatar,
+            OwnerEntityId = ObjectId.GenerateNewId().ToString(),
+            UploadedBy = ObjectId.GenerateNewId().ToString()
+        };
+
+        var document = asset.ToBsonDocument();
+
+        Assert.Equal(BsonType.String, document["visibility"].BsonType);
+        Assert.Equal("FamilyOnly", document["visibility"].AsString);
+        Assert.Equal(BsonType.String, document["purpose"].BsonType);
+        Assert.Equal("MemberAvatar", document["purpose"].AsString);
+    }
+
+    /// <summary>媒體 Repository 的所有公開操作都必須支援取消權杖。</summary>
+    [Fact]
+    public void MediaRepositoryMethods_MustAcceptCancellationTokens()
+    {
+        var requiredMethodNames = new[]
+        {
+            "GetByIdAsync",
+            "CountActiveByOwnerAndPurposeAsync",
+            "CreateAsync",
+            "SoftDeleteAsync",
+            "GetPendingCleanupAsync"
+        };
+
+        var methods = typeof(IMediaRepository).GetMethods();
+
+        foreach (var methodName in requiredMethodNames)
+        {
+            var method = Assert.Single(methods, method => method.Name == methodName);
+            var cancellationToken = method.GetParameters().Last();
+
+            Assert.Equal(typeof(CancellationToken), cancellationToken.ParameterType);
+            Assert.True(cancellationToken.HasDefaultValue);
+        }
+    }
+
+    /// <summary>媒體 Repository 只能讀取未刪除資料，且軟刪除必須可安全重複執行。</summary>
+    [Fact]
+    public void MediaRepository_ActiveAndSoftDeleteFilters_ExcludeDeletedAssets()
+    {
+        var assetId = ObjectId.GenerateNewId().ToString();
+        var ownerId = ObjectId.GenerateNewId().ToString();
+        var activeIdFilter = InvokeMediaDefinition<FilterDefinition<MediaAsset>>(
+            "BuildActiveIdFilter",
+            assetId);
+        var ownerFilter = InvokeMediaDefinition<FilterDefinition<MediaAsset>>(
+            "BuildActiveOwnerPurposeFilter",
+            ownerId,
+            MediaPurpose.MemberAvatar);
+        var softDeleteFilter = InvokeMediaDefinition<FilterDefinition<MediaAsset>>(
+            "BuildSoftDeleteFilter",
+            assetId);
+
+        var activeIdDocument = RenderFilter(activeIdFilter);
+        var ownerDocument = RenderFilter(ownerFilter);
+        var softDeleteDocument = RenderFilter(softDeleteFilter);
+
+        Assert.Equal(ObjectId.Parse(assetId), activeIdDocument["_id"].AsObjectId);
+        Assert.True(activeIdDocument["deletedAt"].IsBsonNull);
+        Assert.Equal(ObjectId.Parse(ownerId), ownerDocument["ownerEntityId"].AsObjectId);
+        Assert.Equal("MemberAvatar", ownerDocument["purpose"].AsString);
+        Assert.True(ownerDocument["deletedAt"].IsBsonNull);
+        Assert.Equal(ObjectId.Parse(assetId), softDeleteDocument["_id"].AsObjectId);
+        Assert.True(softDeleteDocument["deletedAt"].IsBsonNull);
+    }
+
+    /// <summary>軟刪除必須同時記錄 UTC 時間、更新時間與待清理狀態。</summary>
+    [Fact]
+    public void MediaRepository_SoftDeleteUpdate_MarksCleanupPendingAtomically()
+    {
+        var deletedAt = new DateTime(2026, 7, 25, 9, 30, 0, DateTimeKind.Utc);
+        var update = InvokeMediaDefinition<UpdateDefinition<MediaAsset>>(
+            "BuildSoftDeleteUpdate",
+            deletedAt);
+        var document = RenderUpdate(update);
+        var setDocument = document["$set"].AsBsonDocument;
+
+        Assert.Equal(deletedAt, setDocument["deletedAt"].ToUniversalTime());
+        Assert.Equal(deletedAt, setDocument["updatedAt"].ToUniversalTime());
+        Assert.True(setDocument["cleanupPending"].AsBoolean);
+    }
+
+    /// <summary>待清理查詢必須有上限，並以刪除時間與 ID 穩定排序。</summary>
+    [Theory]
+    [InlineData(0, 1)]
+    [InlineData(25, 25)]
+    [InlineData(101, 100)]
+    public void MediaRepository_PendingCleanupQuery_IsBoundedAndDeterministic(
+        int requestedLimit,
+        int expectedLimit)
+    {
+        var filter = InvokeMediaDefinition<FilterDefinition<MediaAsset>>(
+            "BuildPendingCleanupFilter");
+        var options = InvokeMediaDefinition<FindOptions<MediaAsset>>(
+            "BuildPendingCleanupOptions",
+            requestedLimit);
+        var filterDocument = RenderFilter(filter);
+        var sortDocument = RenderSort(options.Sort);
+
+        Assert.True(filterDocument["cleanupPending"].AsBoolean);
+        Assert.True(filterDocument["deletedAt"].AsBsonDocument["$ne"].IsBsonNull);
+        Assert.Equal(expectedLimit, options.Limit);
+        Assert.Equal(1, sortDocument["deletedAt"].AsInt32);
+        Assert.Equal(1, sortDocument["_id"].AsInt32);
+    }
+
+    /// <summary>媒體索引必須支援主動與待清理查詢，且不得阻擋軟刪除後重新建立。</summary>
+    [Fact]
+    public void MediaIndexes_SupportQueriesWithoutUniqueConstraint()
+    {
+        var indexes = InvokePrivateStatic<List<CreateIndexModel<MediaAsset>>>(
+            typeof(MongoDbIndexInitializer),
+            "BuildMediaIndexes");
+        var serializer = BsonSerializer.SerializerRegistry.GetSerializer<MediaAsset>();
+        var renderArgs = new RenderArgs<MediaAsset>(serializer, BsonSerializer.SerializerRegistry);
+
+        var activeIndex = Assert.Single(
+            indexes,
+            index => index.Options.Name == "idx_media_active_owner_purpose");
+        var cleanupIndex = Assert.Single(
+            indexes,
+            index => index.Options.Name == "idx_media_cleanup_pending");
+        var activeKeys = activeIndex.Keys.Render(renderArgs);
+        var cleanupKeys = cleanupIndex.Keys.Render(renderArgs);
+
+        Assert.Equal(["ownerEntityId", "purpose", "deletedAt"], activeKeys.Names);
+        Assert.Equal(["cleanupPending", "deletedAt", "_id"], cleanupKeys.Names);
+        Assert.All(indexes, index => Assert.False(index.Options.Unique.GetValueOrDefault()));
+    }
 
     /// <summary>Controller 不得直接引用 Infrastructure 命名空間。</summary>
     [Fact]
@@ -680,9 +847,56 @@ public sealed class ArchitectureDependencyTests
         return index - startIndex;
     }
 
+    private static T InvokeMediaDefinition<T>(string methodName, params object[] arguments)
+    {
+        return InvokePrivateStatic<T>(typeof(MediaRepository), methodName, arguments);
+    }
+
+    private static T InvokePrivateStatic<T>(
+        Type declaringType,
+        string methodName,
+        params object[] arguments)
+    {
+        var method = declaringType.GetMethod(
+            methodName,
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        Assert.NotNull(method);
+        return Assert.IsAssignableFrom<T>(method.Invoke(null, arguments));
+    }
+
+    private static BsonDocument RenderFilter(FilterDefinition<MediaAsset> filter)
+    {
+        var serializer = BsonSerializer.SerializerRegistry.GetSerializer<MediaAsset>();
+        return filter.Render(new RenderArgs<MediaAsset>(
+            serializer,
+            BsonSerializer.SerializerRegistry));
+    }
+
+    private static BsonDocument RenderSort(SortDefinition<MediaAsset> sort)
+    {
+        var serializer = BsonSerializer.SerializerRegistry.GetSerializer<MediaAsset>();
+        return sort.Render(new RenderArgs<MediaAsset>(
+            serializer,
+            BsonSerializer.SerializerRegistry));
+    }
+
+    private static BsonDocument RenderUpdate(UpdateDefinition<MediaAsset> update)
+    {
+        var serializer = BsonSerializer.SerializerRegistry.GetSerializer<MediaAsset>();
+        return update.Render(new RenderArgs<MediaAsset>(
+            serializer,
+            BsonSerializer.SerializerRegistry)).AsBsonDocument;
+    }
+
     private static string ApiSourcePath()
     {
         return Path.Combine(RepositoryRootPath(), "backend", "FamilyPortal.Api", "Controllers");
+    }
+
+    private static string DomainSourcePath()
+    {
+        return Path.Combine(RepositoryRootPath(), "backend", "FamilyPortal.Domain");
     }
 
     private static string ApplicationProjectPath()

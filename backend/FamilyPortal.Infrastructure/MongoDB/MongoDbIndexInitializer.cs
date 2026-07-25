@@ -26,6 +26,7 @@ public class MongoDbIndexInitializer
         await CreateMemberIndexesAsync(cancellationToken);
         await CreateEventIndexesAsync(cancellationToken);
         await CreateItineraryIndexesAsync(cancellationToken);
+        await CreateMediaIndexesAsync(cancellationToken);
     }
 
     private async Task CreateUserIndexesAsync(CancellationToken cancellationToken)
@@ -180,5 +181,32 @@ public class MongoDbIndexInitializer
         };
 
         await collection.Indexes.CreateManyAsync(indexModels, cancellationToken);
+    }
+
+    private async Task CreateMediaIndexesAsync(CancellationToken cancellationToken)
+    {
+        var collection = _context.GetCollection<MediaAsset>("MediaAssets");
+        await collection.Indexes.CreateManyAsync(BuildMediaIndexes(), cancellationToken);
+    }
+
+    private static List<CreateIndexModel<MediaAsset>> BuildMediaIndexes()
+    {
+        return
+        [
+            // 未刪除媒體的擁有者與用途計數查詢。
+            new(
+                Builders<MediaAsset>.IndexKeys
+                    .Ascending(asset => asset.OwnerEntityId)
+                    .Ascending(asset => asset.Purpose)
+                    .Ascending(asset => asset.DeletedAt),
+                new CreateIndexOptions { Name = "idx_media_active_owner_purpose" }),
+            // 待清理媒體依刪除時間與 ID 穩定排序。
+            new(
+                Builders<MediaAsset>.IndexKeys
+                    .Ascending(asset => asset.CleanupPending)
+                    .Ascending(asset => asset.DeletedAt)
+                    .Ascending(asset => asset.Id),
+                new CreateIndexOptions { Name = "idx_media_cleanup_pending" })
+        ];
     }
 }

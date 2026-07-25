@@ -33,6 +33,7 @@ public static class DependencyInjection
         services.AddScoped<IMemberRepository, MemberRepository>();
         services.AddScoped<IEventRepository, EventRepository>();
         services.AddScoped<IItineraryRepository, ItineraryRepository>();
+        services.AddScoped<IMediaRepository, MediaRepository>();
         services.AddScoped<ICalendarNotifier, SignalRCalendarNotifier>();
         services.AddScoped<ILunarRecurrenceService, LunarRecurrenceService>();
 
