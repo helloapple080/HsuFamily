@@ -6,7 +6,7 @@ namespace FamilyPortal.Application.Interfaces;
 /// <summary>媒體驗證、授權與儲存編排的 use case 邊界。</summary>
 public interface IMediaService
 {
-    /// <summary>驗證並上傳媒體。</summary>
+    /// <summary>驗證並上傳媒體；呼叫端必須先完成 AdminOnly 授權。</summary>
     Task<ServiceResult<MediaResponse>> UploadAsync(
         UploadMediaRequest request,
         string userId,
@@ -18,9 +18,14 @@ public interface IMediaService
         bool isAuthenticated,
         CancellationToken cancellationToken);
 
-    /// <summary>軟刪除媒體並嘗試清理儲存物件。</summary>
+    /// <summary>軟刪除媒體並嘗試清理儲存物件；呼叫端必須先完成 AdminOnly 授權。</summary>
     Task<ServiceResult<bool>> DeleteAsync(
         string mediaId,
         string userId,
+        CancellationToken cancellationToken);
+
+    /// <summary>重試有上限的待清理媒體批次。</summary>
+    Task<ServiceResult<int>> CleanupPendingAsync(
+        int limit,
         CancellationToken cancellationToken);
 }

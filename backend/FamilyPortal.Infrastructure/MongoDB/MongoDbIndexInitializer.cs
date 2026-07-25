@@ -200,6 +200,20 @@ public class MongoDbIndexInitializer
                     .Ascending(asset => asset.Purpose)
                     .Ascending(asset => asset.DeletedAt),
                 new CreateIndexOptions { Name = "idx_media_active_owner_purpose" }),
+            // 新媒體以 slot 原子限制數量；legacy missing-slot 文件不參與唯一索引。
+            new(
+                Builders<MediaAsset>.IndexKeys
+                    .Ascending(asset => asset.OwnerEntityId)
+                    .Ascending(asset => asset.Purpose)
+                    .Ascending(asset => asset.Slot),
+                new CreateIndexOptions<MediaAsset>
+                {
+                    Name = "idx_media_active_owner_purpose_slot_unique",
+                    Unique = true,
+                    PartialFilterExpression = Builders<MediaAsset>.Filter.And(
+                        Builders<MediaAsset>.Filter.Eq(asset => asset.DeletedAt, null),
+                        Builders<MediaAsset>.Filter.Exists("slot", true))
+                }),
             // 待清理媒體依刪除時間與 ID 穩定排序。
             new(
                 Builders<MediaAsset>.IndexKeys

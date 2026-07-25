@@ -101,6 +101,7 @@ public sealed class ArchitectureDependencyTests
         {
             Visibility = MediaVisibility.FamilyOnly,
             Purpose = MediaPurpose.MemberAvatar,
+            Slot = 0,
             OwnerEntityId = ObjectId.GenerateNewId().ToString(),
             UploadedBy = ObjectId.GenerateNewId().ToString()
         };
@@ -111,6 +112,7 @@ public sealed class ArchitectureDependencyTests
         Assert.Equal("FamilyOnly", document["visibility"].AsString);
         Assert.Equal(BsonType.String, document["purpose"].BsonType);
         Assert.Equal("MemberAvatar", document["purpose"].AsString);
+        Assert.Equal(0, document["slot"].AsInt32);
     }
 
     /// <summary>媒體 Repository 的所有公開操作都必須支援取消權杖。</summary>
@@ -120,8 +122,7 @@ public sealed class ArchitectureDependencyTests
         var requiredMethodNames = new[]
         {
             "GetByIdAsync",
-            "CountActiveByOwnerAndPurposeAsync",
-            "CreateAsync",
+            "TryCreateAsync",
             "SoftDeleteAsync",
             "MarkCleanupCompleteAsync",
             "GetPendingCleanupAsync"
@@ -232,9 +233,9 @@ public sealed class ArchitectureDependencyTests
         Assert.Equal(1, sortDocument["_id"].AsInt32);
     }
 
-    /// <summary>媒體索引必須支援主動與待清理查詢，且不得阻擋軟刪除後重新建立。</summary>
+    /// <summary>媒體 slot 索引必須只唯一限制新的 active slot，並排除 legacy missing-slot 文件。</summary>
     [Fact]
-    public void MediaIndexes_SupportQueriesWithoutUniqueConstraint()
+    public void MediaIndexes_EnforceActiveSlotsWithoutBlockingLegacyOrDeletedAssets()
     {
         var indexes = InvokePrivateStatic<List<CreateIndexModel<MediaAsset>>>(
             typeof(MongoDbIndexInitializer),
@@ -248,12 +249,22 @@ public sealed class ArchitectureDependencyTests
         var cleanupIndex = Assert.Single(
             indexes,
             index => index.Options.Name == "idx_media_cleanup_pending");
+        var slotIndex = Assert.Single(
+            indexes,
+            index => index.Options.Name == "idx_media_active_owner_purpose_slot_unique");
         var activeKeys = activeIndex.Keys.Render(renderArgs);
         var cleanupKeys = cleanupIndex.Keys.Render(renderArgs);
+        var slotKeys = slotIndex.Keys.Render(renderArgs);
+        var partialFilter = slotIndex.Options.PartialFilterExpression!.Render(renderArgs);
 
         Assert.Equal(["ownerEntityId", "purpose", "deletedAt"], activeKeys.Names);
         Assert.Equal(["cleanupPending", "deletedAt", "_id"], cleanupKeys.Names);
-        Assert.All(indexes, index => Assert.False(index.Options.Unique.GetValueOrDefault()));
+        Assert.Equal(["ownerEntityId", "purpose", "slot"], slotKeys.Names);
+        Assert.True(slotIndex.Options.Unique);
+        Assert.True(partialFilter["deletedAt"].IsBsonNull);
+        Assert.True(partialFilter["slot"].AsBsonDocument["$exists"].AsBoolean);
+        Assert.False(activeIndex.Options.Unique.GetValueOrDefault());
+        Assert.False(cleanupIndex.Options.Unique.GetValueOrDefault());
     }
 
     /// <summary>Controller 不得直接引用 Infrastructure 命名空間。</summary>

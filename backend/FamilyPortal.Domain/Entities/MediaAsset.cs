@@ -46,6 +46,10 @@ public sealed class MediaAsset : BaseEntity
     [BsonRepresentation(BsonType.String)]
     public MediaPurpose Purpose { get; set; }
 
+    /// <summary>同一擁有者與用途下的原子占位編號。</summary>
+    [BsonElement("slot")]
+    public int Slot { get; set; }
+
     /// <summary>擁有此媒體的領域實體 ID。</summary>
     [BsonElement("ownerEntityId")]
     [BsonRepresentation(BsonType.ObjectId)]

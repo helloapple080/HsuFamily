@@ -1,5 +1,6 @@
 using FamilyPortal.Application.Common;
 using FamilyPortal.Application.Interfaces;
+using FamilyPortal.Application.Models;
 using FamilyPortal.Domain.Entities;
 using FamilyPortal.Domain.Enums;
 using MongoDB.Driver;
@@ -28,25 +29,23 @@ public sealed class MediaRepository : IMediaRepository
     }
 
     /// <inheritdoc />
-    public async Task<long> CountActiveByOwnerAndPurposeAsync(
-        string ownerEntityId,
-        MediaPurpose purpose,
-        CancellationToken cancellationToken = default)
-    {
-        return await _collection.CountDocumentsAsync(
-            BuildActiveOwnerPurposeFilter(ownerEntityId, purpose),
-            cancellationToken: cancellationToken);
-    }
-
-    /// <inheritdoc />
-    public async Task CreateAsync(
+    public async Task<MediaCreateResult> TryCreateAsync(
         MediaAsset asset,
         CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
         asset.CreatedAt = now;
         asset.UpdatedAt = now;
-        await _collection.InsertOneAsync(asset, cancellationToken: cancellationToken);
+        try
+        {
+            await _collection.InsertOneAsync(asset, cancellationToken: cancellationToken);
+            return MediaCreateResult.Created;
+        }
+        catch (MongoWriteException exception)
+            when (exception.WriteError?.Category == ServerErrorCategory.DuplicateKey)
+        {
+            return MediaCreateResult.SlotConflict;
+        }
     }
 
     /// <inheritdoc />

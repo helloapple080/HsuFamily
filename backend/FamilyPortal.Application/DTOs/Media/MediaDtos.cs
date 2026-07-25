@@ -36,7 +36,7 @@ public sealed record MediaResponse(
     string OwnerEntityId);
 
 /// <summary>提供給 HTTP adapter 的供應商無關媒體內容描述。</summary>
-/// <param name="Content">唯讀內容資料流。</param>
+/// <param name="Content">由呼叫端負責 dispose 的唯讀內容資料流。</param>
 /// <param name="ContentType">信任的媒體 MIME 類型。</param>
 /// <param name="Length">內容長度。</param>
 public sealed record MediaContentResponse(Stream Content, string ContentType, long Length);

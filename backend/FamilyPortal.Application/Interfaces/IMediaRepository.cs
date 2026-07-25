@@ -1,5 +1,5 @@
 using FamilyPortal.Domain.Entities;
-using FamilyPortal.Domain.Enums;
+using FamilyPortal.Application.Models;
 
 namespace FamilyPortal.Application.Interfaces;
 
@@ -11,14 +11,8 @@ public interface IMediaRepository
         string id,
         CancellationToken cancellationToken = default);
 
-    /// <summary>計算指定擁有者與用途的未刪除媒體數量。</summary>
-    Task<long> CountActiveByOwnerAndPurposeAsync(
-        string ownerEntityId,
-        MediaPurpose purpose,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>建立媒體中繼資料。</summary>
-    Task CreateAsync(
+    /// <summary>原子建立媒體中繼資料，並回報 active slot 衝突。</summary>
+    Task<MediaCreateResult> TryCreateAsync(
         MediaAsset asset,
         CancellationToken cancellationToken = default);
 

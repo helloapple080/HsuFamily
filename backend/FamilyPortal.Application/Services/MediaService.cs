@@ -10,8 +10,7 @@ namespace FamilyPortal.Application.Services;
 /// <summary>協調媒體驗證、可見性授權、儲存與中繼資料補償。</summary>
 public sealed class MediaService : IMediaService
 {
-    private const int AvatarLimit = 1;
-    private const int GalleryLimit = 30;
+    private const int AvatarSlotCount = 1;
 
     private readonly IMediaRepository _repository;
     private readonly IMediaStorage _storage;
@@ -44,28 +43,6 @@ public sealed class MediaService : IMediaService
         if (!Enum.IsDefined(request.Purpose) || !Enum.IsDefined(request.Visibility))
         {
             return ValidationFailure<MediaResponse>("無效的媒體用途或可見性");
-        }
-
-        long activeCount;
-        try
-        {
-            activeCount = await _repository.CountActiveByOwnerAndPurposeAsync(
-                request.OwnerEntityId,
-                request.Purpose,
-                cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception)
-        {
-            return ConflictFailure<MediaResponse>("無法確認媒體數量上限");
-        }
-
-        if (activeCount >= GetPurposeLimit(request.Purpose))
-        {
-            return ConflictFailure<MediaResponse>("此項目的媒體數量已達上限");
         }
 
         ValidatedMediaUpload? validated;
@@ -110,37 +87,34 @@ public sealed class MediaService : IMediaService
             return ConflictFailure<MediaResponse>("媒體儲存回應無效");
         }
 
-        var asset = new MediaAsset
+        var slotCount = request.Purpose == MediaPurpose.MemberAvatar
+            ? AvatarSlotCount
+            : ValidationLimits.MaxMediaGalleryItems;
+        for (var slot = 0; slot < slotCount; slot++)
         {
-            StorageProvider = _storage.ProviderName,
-            StorageObjectId = stored.ObjectId,
-            OriginalFileName = validated.Upload.FileName,
-            ContentType = validated.ContentType,
-            SizeBytes = validated.Length,
-            Width = validated.Width,
-            Height = validated.Height,
-            Visibility = request.Visibility,
-            Purpose = request.Purpose,
-            OwnerEntityId = request.OwnerEntityId,
-            UploadedBy = userId
-        };
-
-        try
-        {
-            await _repository.CreateAsync(asset, cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            await TryCompensateStorageAsync(stored.ObjectId);
-            throw;
-        }
-        catch (Exception)
-        {
-            await TryCompensateStorageAsync(stored.ObjectId);
-            return ConflictFailure<MediaResponse>("媒體中繼資料寫入失敗");
+            var asset = BuildAsset(request, userId, stored.ObjectId, validated, slot);
+            try
+            {
+                var createResult = await _repository.TryCreateAsync(asset, cancellationToken);
+                if (createResult == MediaCreateResult.Created)
+                {
+                    return ServiceResult<MediaResponse>.Success(MapToResponse(asset));
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                await TryCompensateStorageAsync(stored.ObjectId);
+                throw;
+            }
+            catch (Exception)
+            {
+                await TryCompensateStorageAsync(stored.ObjectId);
+                return ConflictFailure<MediaResponse>("媒體中繼資料寫入失敗");
+            }
         }
 
-        return ServiceResult<MediaResponse>.Success(MapToResponse(asset));
+        await TryCompensateStorageAsync(stored.ObjectId);
+        return ConflictFailure<MediaResponse>("此項目的媒體數量已達上限");
     }
 
     /// <inheritdoc />
@@ -173,14 +147,41 @@ public sealed class MediaService : IMediaService
             return ServiceResult<MediaContentResponse>.Failure(ServiceError.NotFound, "媒體不存在");
         }
 
-        if (asset.Visibility != MediaVisibility.Public && !isAuthenticated)
+        var authorizationError = asset.Visibility switch
         {
-            return ServiceResult<MediaContentResponse>.Failure(ServiceError.Unauthorized, "需要登入才能讀取此媒體");
+            MediaVisibility.Public => ServiceError.None,
+            MediaVisibility.FamilyOnly when isAuthenticated => ServiceError.None,
+            MediaVisibility.FamilyOnly => ServiceError.Unauthorized,
+            _ => ServiceError.Forbidden
+        };
+        if (authorizationError != ServiceError.None)
+        {
+            return ServiceResult<MediaContentResponse>.Failure(
+                authorizationError,
+                authorizationError == ServiceError.Unauthorized
+                    ? "需要登入才能讀取此媒體"
+                    : "媒體可見性無效");
+        }
+
+        if (asset.SizeBytes is <= 0 or > ValidationLimits.MaxMediaBytes)
+        {
+            return ConflictFailure<MediaContentResponse>("媒體內容長度無效");
         }
 
         try
         {
-            var content = await _storage.OpenReadAsync(asset.StorageObjectId, cancellationToken);
+            using var providerContent = await _storage.OpenReadAsync(
+                asset.StorageObjectId,
+                cancellationToken);
+            var content = await CopyProviderContentAsync(
+                providerContent,
+                asset.SizeBytes,
+                cancellationToken);
+            if (content is null)
+            {
+                return ConflictFailure<MediaContentResponse>("媒體內容長度不符");
+            }
+
             return ServiceResult<MediaContentResponse>.Success(
                 new MediaContentResponse(content, asset.ContentType, asset.SizeBytes));
         }
@@ -270,8 +271,48 @@ public sealed class MediaService : IMediaService
         return ServiceResult<bool>.Success(true);
     }
 
-    private static int GetPurposeLimit(MediaPurpose purpose) =>
-        purpose == MediaPurpose.MemberAvatar ? AvatarLimit : GalleryLimit;
+    /// <inheritdoc />
+    public async Task<ServiceResult<int>> CleanupPendingAsync(
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        var boundedLimit = Math.Clamp(limit, 1, ValidationLimits.MaxPageSize);
+        List<MediaAsset> pending;
+        try
+        {
+            pending = await _repository.GetPendingCleanupAsync(boundedLimit, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return ConflictFailure<int>("無法讀取待清理媒體");
+        }
+
+        var completed = 0;
+        foreach (var asset in pending.Take(boundedLimit))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                await _storage.DeleteAsync(asset.StorageObjectId, cancellationToken);
+                await _repository.MarkCleanupCompleteAsync(asset.Id, cancellationToken);
+                completed++;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception)
+            {
+                // 單一項清理失敗保留 pending，並繼續處理同批其他媒體。
+            }
+        }
+
+        return ServiceResult<int>.Success(completed);
+    }
 
     private static bool IsValidObjectId(string? id)
     {
@@ -300,6 +341,72 @@ public sealed class MediaService : IMediaService
         stored.Length == validated.Length &&
         stored.Width == validated.Width &&
         stored.Height == validated.Height;
+
+    private MediaAsset BuildAsset(
+        UploadMediaRequest request,
+        string userId,
+        string storageObjectId,
+        ValidatedMediaUpload validated,
+        int slot) => new()
+        {
+            StorageProvider = _storage.ProviderName,
+            StorageObjectId = storageObjectId,
+            OriginalFileName = validated.Upload.FileName,
+            ContentType = validated.ContentType,
+            SizeBytes = validated.Length,
+            Width = validated.Width,
+            Height = validated.Height,
+            Visibility = request.Visibility,
+            Purpose = request.Purpose,
+            Slot = slot,
+            OwnerEntityId = request.OwnerEntityId,
+            UploadedBy = userId
+        };
+
+    private static async Task<MemoryStream?> CopyProviderContentAsync(
+        Stream providerContent,
+        long expectedLength,
+        CancellationToken cancellationToken)
+    {
+        var copy = new MemoryStream((int)expectedLength);
+        var buffer = new byte[81920];
+        long total = 0;
+        try
+        {
+            while (true)
+            {
+                var read = await providerContent.ReadAsync(buffer, cancellationToken);
+                if (read == 0)
+                {
+                    break;
+                }
+
+                total += read;
+                if (total > expectedLength || total > ValidationLimits.MaxMediaBytes)
+                {
+                    copy.Dispose();
+                    return null;
+                }
+
+                await copy.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+            }
+
+            if (total != expectedLength)
+            {
+                copy.Dispose();
+                return null;
+            }
+
+            var ownedReadOnlyContent = new MemoryStream(copy.ToArray(), writable: false);
+            copy.Dispose();
+            return ownedReadOnlyContent;
+        }
+        catch
+        {
+            copy.Dispose();
+            throw;
+        }
+    }
 
     private async Task TryCompensateStorageAsync(string? storageObjectId)
     {

@@ -18,7 +18,7 @@ public interface IMediaStorage
         string storageObjectId,
         CancellationToken cancellationToken);
 
-    /// <summary>刪除儲存物件。</summary>
+    /// <summary>幂等刪除儲存物件；物件已不存在時仍應視為成功。</summary>
     Task DeleteAsync(
         string storageObjectId,
         CancellationToken cancellationToken);
