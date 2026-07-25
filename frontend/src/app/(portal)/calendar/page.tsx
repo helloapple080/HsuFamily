@@ -17,6 +17,14 @@ import { useAuthStore } from '@/stores/authStore'
 const monthNames = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月']
 const dayNames = ['日', '一', '二', '三', '四', '五', '六']
 
+function utcDayStart(date: Date): string {
+  return `${format(date, 'yyyy-MM-dd')}T00:00:00.000Z`
+}
+
+function utcDayEnd(date: Date): string {
+  return `${format(date, 'yyyy-MM-dd')}T23:59:59.999Z`
+}
+
 export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
@@ -25,8 +33,8 @@ export default function CalendarPage() {
   const month = currentDate.getMonth() + 1
   const lunarDays = getMonthLunarInfo(year, month)
   const emptyDays = Array.from({ length: new Date(year, month - 1, 1).getDay() })
-  const queryStart = format(startOfWeek(startOfMonth(currentDate)), 'yyyy-MM-dd')
-  const queryEnd = format(endOfWeek(endOfMonth(currentDate)), 'yyyy-MM-dd')
+  const queryStart = utcDayStart(startOfWeek(startOfMonth(currentDate)))
+  const queryEnd = utcDayEnd(endOfWeek(endOfMonth(currentDate)))
   const { data: events = [], isLoading } = useCalendarEvents(queryStart, queryEnd)
   const { on } = useSignalR()
   const queryClient = useQueryClient()

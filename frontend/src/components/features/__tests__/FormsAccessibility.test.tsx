@@ -17,6 +17,7 @@ const mutations = vi.hoisted(() => ({
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 vi.mock('@/hooks/useCalendarEvents', () => ({
+  useCalendarEvent: () => ({ data: undefined, isLoading: false, isError: false, error: null, refetch: vi.fn() }),
   useCreateEvent: () => ({ mutateAsync: mutations.eventCreate, isPending: false }),
   useUpdateEvent: () => ({ mutateAsync: mutations.eventUpdate, isPending: false }),
 }))

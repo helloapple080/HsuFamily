@@ -45,27 +45,38 @@ public class EventRepository : MongoRepository<Event>, IEventRepository
     public async Task<List<Event>> GetRecurringRulesAsync(
         DateTime start,
         DateTime end,
-        int limit,
         CancellationToken cancellationToken = default)
     {
-        var filter = Builders<Event>.Filter.And(
-            Builders<Event>.Filter.Ne(e => e.RecurrenceRule, null),
-            Builders<Event>.Filter.Or(
-                Builders<Event>.Filter.Eq(e => e.RecurrenceRule!.EffectiveFrom, null),
-                Builders<Event>.Filter.Lte(e => e.RecurrenceRule!.EffectiveFrom, end)
-            ),
-            Builders<Event>.Filter.Or(
-                Builders<Event>.Filter.Eq(e => e.RecurrenceRule!.EffectiveUntil, null),
-                Builders<Event>.Filter.Gte(e => e.RecurrenceRule!.EffectiveUntil, start)
-            )
-        );
+        var filter = BuildRecurringRulesFilter(start, end);
 
         return await _collection
             .Find(filter)
             .SortBy(e => e.StartDate)
             .ThenBy(e => e.Id)
-            .Limit(Math.Clamp(limit, 1, ValidationLimits.MaxPageSize))
             .ToListAsync(cancellationToken);
+    }
+
+    private static FilterDefinition<Event> BuildRecurringRulesFilter(DateTime start, DateTime end)
+    {
+        var effectiveStartDate = DateTime.SpecifyKind(start.Date, DateTimeKind.Utc);
+        var effectiveEndOfDay = end.Date == DateTime.MaxValue.Date
+            ? DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc)
+            : DateTime.SpecifyKind(end.Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
+        return Builders<Event>.Filter.And(
+            Builders<Event>.Filter.Eq(e => e.IsLunarDate, true),
+            Builders<Event>.Filter.Ne(e => e.RecurrenceRule, null),
+            Builders<Event>.Filter.In(
+                e => e.RecurrenceRule!.Type,
+                [RecurrenceType.LunarYearly, RecurrenceType.LunarMonthly]),
+            Builders<Event>.Filter.Or(
+                Builders<Event>.Filter.Eq(e => e.RecurrenceRule!.EffectiveFrom, null),
+                Builders<Event>.Filter.Lte(e => e.RecurrenceRule!.EffectiveFrom, effectiveEndOfDay)
+            ),
+            Builders<Event>.Filter.Or(
+                Builders<Event>.Filter.Eq(e => e.RecurrenceRule!.EffectiveUntil, null),
+                Builders<Event>.Filter.Gte(e => e.RecurrenceRule!.EffectiveUntil, effectiveStartDate)
+            )
+        );
     }
 
     /// <inheritdoc />

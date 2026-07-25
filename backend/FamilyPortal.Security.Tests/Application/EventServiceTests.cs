@@ -230,7 +230,6 @@ public sealed class EventServiceTests
                 Assert.Equal("農曆八月十五", occurrence.LunarDate?.DisplayText);
             });
         Assert.Equal(source.Token, repository.LastRecurringCancellationToken);
-        Assert.Equal(ValidationLimits.MaxPageSize, repository.LastRecurringLimit);
     }
 
     /// <summary>同一日期已有穩定 occurrence 時，不應再輸出週期規則範本。</summary>
@@ -271,6 +270,133 @@ public sealed class EventServiceTests
 
         var only = Assert.Single(result.Value!);
         Assert.Equal("rule-1:2026-02-17", only.Id);
+        Assert.Equal(new DateTime(2026, 2, 17, 0, 0, 0, DateTimeKind.Utc), only.StartDate);
+        Assert.Equal(DateTimeKind.Utc, only.StartDate.Kind);
+    }
+
+    /// <summary>週期規則不得在展開前截斷，否則排序後應保留的 occurrence 可能遺失。</summary>
+    [Fact]
+    public async Task GetByDateRangeAsync_CapsOnlyAfterExpandingAllRecurringRules()
+    {
+        var rules = Enumerable.Range(1, ValidationLimits.MaxPageSize + 1)
+            .Select(index => new Event
+            {
+                Id = $"rule-{index:D3}",
+                Title = $"規則 {index}",
+                StartDate = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                IsAllDay = true,
+                IsLunarDate = true,
+                LunarDate = new LunarDate { Year = 2025, Month = 1, Day = 1 },
+                RecurrenceRule = new RecurrenceRule { Type = RecurrenceType.LunarYearly },
+                CreatedBy = "creator-1"
+            })
+            .ToList();
+        var repository = new FakeEventRepository { RecurringRules = rules };
+        var recurrenceService = new FakeLunarRecurrenceService
+        {
+            OccurrenceFactory = rule =>
+            [
+                OccurrenceFor(
+                    rule.Id,
+                    rule.Id == "rule-101"
+                        ? new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc)
+                        : new DateTime(2026, 9, 30, 0, 0, 0, DateTimeKind.Utc))
+            ]
+        };
+        var service = new EventService(repository, new FakeCalendarNotifier(), recurrenceService);
+
+        var result = await service.GetByDateRangeAsync(
+            new EventRangeRequest
+            {
+                Start = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc),
+                End = new DateTime(2026, 9, 30, 23, 59, 59, DateTimeKind.Utc)
+            },
+            CancellationToken.None);
+
+        Assert.Equal(ValidationLimits.MaxPageSize, result.Value!.Count);
+        Assert.Equal("rule-101:2026-09-01", result.Value[0].Id);
+        Assert.Contains(result.Value, response => response.SourceRuleId == "rule-101");
+    }
+
+    /// <summary>跨日 occurrence 的來源日期早於查詢起日時，只要期間仍重疊就必須輸出。</summary>
+    [Fact]
+    public async Task GetByDateRangeAsync_ExpandsBackByPositiveSourceDurationForOverlap()
+    {
+        var rule = new Event
+        {
+            Id = "overnight-rule",
+            Title = "跨夜祭典",
+            StartDate = new DateTime(2025, 1, 1, 23, 0, 0, DateTimeKind.Utc),
+            EndDate = new DateTime(2025, 1, 2, 2, 0, 0, DateTimeKind.Utc),
+            IsLunarDate = true,
+            LunarDate = new LunarDate { Year = 2025, Month = 1, Day = 1 },
+            RecurrenceRule = new RecurrenceRule { Type = RecurrenceType.LunarYearly },
+            CreatedBy = "creator-1"
+        };
+        var repository = new FakeEventRepository { RecurringRules = [rule] };
+        var recurrenceService = new FakeLunarRecurrenceService
+        {
+            Occurrences =
+            [
+                OccurrenceFor(
+                    rule.Id,
+                    new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc))
+            ]
+        };
+        var service = new EventService(repository, new FakeCalendarNotifier(), recurrenceService);
+
+        var result = await service.GetByDateRangeAsync(
+            new EventRangeRequest
+            {
+                Start = new DateTime(2026, 1, 2, 0, 30, 0, DateTimeKind.Utc),
+                End = new DateTime(2026, 1, 2, 1, 0, 0, DateTimeKind.Utc)
+            },
+            CancellationToken.None);
+
+        var only = Assert.Single(result.Value!);
+        Assert.Equal(new DateTime(2026, 1, 1, 23, 0, 0, DateTimeKind.Utc), only.StartDate);
+        Assert.Equal(new DateTime(2026, 1, 2, 2, 0, 0, DateTimeKind.Utc), only.EndDate);
+        Assert.Equal(new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc), recurrenceService.ExpansionRequests[0].Start);
+    }
+
+    /// <summary>舊資料若含負期間，不得因此把 recurrence 展開起點錯誤向前移動。</summary>
+    [Fact]
+    public async Task GetByDateRangeAsync_DoesNotExpandBackForNegativeSourceDuration()
+    {
+        var rule = new Event
+        {
+            Id = "invalid-duration-rule",
+            Title = "負期間舊資料",
+            StartDate = new DateTime(2025, 1, 2, 2, 0, 0, DateTimeKind.Utc),
+            EndDate = new DateTime(2025, 1, 2, 1, 0, 0, DateTimeKind.Utc),
+            IsLunarDate = true,
+            LunarDate = new LunarDate { Year = 2025, Month = 1, Day = 2 },
+            RecurrenceRule = new RecurrenceRule { Type = RecurrenceType.LunarYearly },
+            CreatedBy = "creator-1"
+        };
+        var recurrenceService = new FakeLunarRecurrenceService
+        {
+            Occurrences =
+            [
+                OccurrenceFor(
+                    rule.Id,
+                    new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc))
+            ]
+        };
+        var service = new EventService(
+            new FakeEventRepository { RecurringRules = [rule] },
+            new FakeCalendarNotifier(),
+            recurrenceService);
+
+        await service.GetByDateRangeAsync(
+            new EventRangeRequest
+            {
+                Start = new DateTime(2026, 1, 2, 0, 30, 0, DateTimeKind.Utc),
+                End = new DateTime(2026, 1, 2, 23, 0, 0, DateTimeKind.Utc)
+            },
+            CancellationToken.None);
+
+        Assert.Equal(new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc), recurrenceService.ExpansionRequests[0].Start);
     }
 
     /// <summary>讀取事件時應複製農曆資料並忽略資料庫內不可信的顯示文字。</summary>
@@ -358,6 +484,16 @@ public sealed class EventServiceTests
         Tags = ["family"]
     };
 
+    private static LunarOccurrence OccurrenceFor(string ruleId, DateTime solarDate) => new()
+    {
+        Id = $"{ruleId}:{solarDate:yyyy-MM-dd}",
+        SourceRuleId = ruleId,
+        SolarDate = solarDate,
+        LunarYear = 2026,
+        LunarMonth = 1,
+        LunarDay = 1
+    };
+
     private sealed class FakeCalendarNotifier : ICalendarNotifier
     {
         public (string Name, string Id)? LastEvent { get; private set; }
@@ -387,7 +523,6 @@ public sealed class EventServiceTests
         public CancellationToken LastCancellationToken { get; private set; }
         public List<Event> RangeEvents { get; init; } = [];
         public List<Event> RecurringRules { get; init; } = [];
-        public int LastRecurringLimit { get; private set; }
         public CancellationToken LastRecurringCancellationToken { get; private set; }
 
         /// <inheritdoc />
@@ -462,10 +597,8 @@ public sealed class EventServiceTests
         public Task<List<Event>> GetRecurringRulesAsync(
             DateTime start,
             DateTime end,
-            int limit,
             CancellationToken cancellationToken = default)
         {
-            LastRecurringLimit = limit;
             LastRecurringCancellationToken = cancellationToken;
             return Task.FromResult(RecurringRules);
         }
@@ -501,6 +634,8 @@ public sealed class EventServiceTests
     private sealed class FakeLunarRecurrenceService : ILunarRecurrenceService
     {
         public IReadOnlyList<LunarOccurrence> Occurrences { get; init; } = [];
+        public Func<Event, IReadOnlyList<LunarOccurrence>>? OccurrenceFactory { get; init; }
+        public List<(string RuleId, DateTime Start, DateTime End)> ExpansionRequests { get; } = [];
 
         /// <inheritdoc />
         public Task<IReadOnlyList<LunarOccurrence>> ExpandAsync(
@@ -510,7 +645,12 @@ public sealed class EventServiceTests
             CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult(Occurrences);
+            ExpansionRequests.Add((rule.Id, rangeStart, rangeEnd));
+            var candidates = OccurrenceFactory?.Invoke(rule) ?? Occurrences;
+            IReadOnlyList<LunarOccurrence> result = candidates
+                .Where(occurrence => occurrence.SolarDate >= rangeStart && occurrence.SolarDate <= rangeEnd)
+                .ToList();
+            return Task.FromResult(result);
         }
     }
 }

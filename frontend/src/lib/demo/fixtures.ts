@@ -34,6 +34,7 @@ export const demoEvents = freezeItems<CalendarEvent>([
     startDate: '2026-07-26T10:30:00.000Z', endDate: '2026-07-26T13:00:00.000Z', isAllDay: false,
     isLunarDate: false, relatedMemberIds: ['demo-member-1', 'demo-member-2'], tags: ['聚餐', '示範'], color: '#2563eb',
     createdBy: 'demo', createdAt: '2026-07-01T00:00:00.000Z', updatedAt: '2026-07-01T00:00:00.000Z',
+    isOccurrence: false, sourceRuleId: null,
   },
   {
     id: 'demo-event-2', title: '農曆初一祭祖提醒', description: '示範台灣家族文化提醒。', eventType: 'Worship',
@@ -42,11 +43,13 @@ export const demoEvents = freezeItems<CalendarEvent>([
     worshipDetails: { deity: '祖先', offerings: ['鮮花', '水果'], preparations: ['整理供桌'], notes: '內容皆為展示資料' },
     relatedMemberIds: [], tags: ['祭祖', '示範'], color: '#ca8a04', createdBy: 'demo',
     createdAt: '2026-07-01T00:00:00.000Z', updatedAt: '2026-07-01T00:00:00.000Z',
+    isOccurrence: false, sourceRuleId: null,
   },
   {
     id: 'demo-event-3', title: '示範成員甲生日', eventType: 'Birthday', startDate: '2026-07-12T00:00:00.000Z',
     isAllDay: true, isLunarDate: false, relatedMemberIds: ['demo-member-2'], tags: ['生日'], color: '#db2777',
     createdBy: 'demo', createdAt: '2026-07-01T00:00:00.000Z', updatedAt: '2026-07-01T00:00:00.000Z',
+    isOccurrence: false, sourceRuleId: null,
   },
 ])
 

@@ -26,6 +26,24 @@ export function useCalendarEvents(start: string, end: string) {
   })
 }
 
+export function useCalendarEvent(id: string | null, enabled = true) {
+  return useQuery({
+    queryKey: ['events', 'detail', id],
+    queryFn: async () => {
+      if (!id) throw new Error('缺少事件識別碼')
+      if (isDemoMode) {
+        const event = demoEvents.find((item) => item.id === id)
+        if (!event) throw new Error('找不到來源事件')
+        return { ...event }
+      }
+      const res = await api.get<ApiResponse<CalendarEvent>>(`/api/events/${id}`)
+      if (!res.data.success || !res.data.data) throw new Error(res.data.message || '找不到來源事件')
+      return res.data.data
+    },
+    enabled: enabled && Boolean(id),
+  })
+}
+
 export function useCreateEvent() {
   const queryClient = useQueryClient()
 

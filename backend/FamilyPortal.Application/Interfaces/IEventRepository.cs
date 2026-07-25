@@ -18,7 +18,6 @@ public interface IEventRepository : IRepository<Event>
     Task<List<Event>> GetRecurringRulesAsync(
         DateTime start,
         DateTime end,
-        int limit,
         CancellationToken cancellationToken = default);
 
     /// <summary>根據事件類型取得事件</summary>

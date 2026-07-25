@@ -46,8 +46,8 @@ export interface CalendarEvent {
   createdBy: string
   createdAt: string
   updatedAt: string
-  isOccurrence?: boolean
-  sourceRuleId?: string | null
+  isOccurrence: boolean
+  sourceRuleId: string | null
 }
 
 /// 建立/更新事件請求

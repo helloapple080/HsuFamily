@@ -30,7 +30,6 @@ public sealed class EventService(
         var recurringRules = await eventRepository.GetRecurringRulesAsync(
             rangeStart,
             rangeEnd,
-            ValidationLimits.MaxPageSize,
             cancellationToken);
 
         var occurrenceResponses = new List<EventResponse>();
@@ -38,7 +37,7 @@ public sealed class EventService(
         {
             var occurrences = await lunarRecurrenceService.ExpandAsync(
                 rule,
-                rangeStart.Date,
+                GetExpansionStart(rule, rangeStart),
                 rangeEnd.Date,
                 cancellationToken);
             occurrenceResponses.AddRange(
@@ -324,6 +323,23 @@ public sealed class EventService(
         evt.IsAllDay
             ? DateTime.SpecifyKind(evt.StartDate.Date, DateTimeKind.Utc)
             : evt.StartDate;
+
+    private static DateTime GetExpansionStart(DomainEvent rule, DateTime rangeStart)
+    {
+        if (rule.EndDate is not { } endDate)
+        {
+            return rangeStart.Date;
+        }
+
+        var duration = endDate - rule.StartDate;
+        if (duration <= TimeSpan.Zero)
+        {
+            return rangeStart.Date;
+        }
+
+        var startTicks = Math.Max(DateTime.MinValue.Ticks, rangeStart.Ticks - duration.Ticks);
+        return new DateTime(startTicks, DateTimeKind.Utc).Date;
+    }
 
     private static DateTime NormalizeUtc(DateTime value) => value.ToUniversalTime();
 
