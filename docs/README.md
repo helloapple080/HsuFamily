@@ -8,6 +8,16 @@ code_baseline: 57d1110
 
 # 許氏入口網文件中心
 
+## 公開展示網站
+
+GitHub Pages 唯讀展示版：<https://helloapple080.github.io/HsuFamily/>
+
+- 所有姓名、聯絡方式、事件與行程皆為虛構 fixtures，不含 MongoDB 既有資料。
+- 展示版不呼叫 .NET API、不建立 SignalR 連線，也不處理登入、Cookie 或密碼。
+- 新增、修改與刪除只會顯示「公開展示模式不會儲存任何變更」，不會永久保存。
+- 每次 `main` 更新後由 `.github/workflows/pages.yml` 自動測試、靜態建置並部署。
+- 正式系統仍使用 Next.js standalone、.NET API、MongoDB 與 SignalR；Demo build 不會改變正式部署模式。
+
 ## 基準結論
 
 截至程式碼基準 `57d1110`，本專案已具備**企業級工程思維**，且已知的程式碼 Critical／High 安全基線已完成修復與回歸驗證。這代表架構、安全、測試、供應鏈與部署設定已有可持續執行的閉環；不代表已取得正式生產環境、法遵或第三方資安認證。

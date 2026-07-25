@@ -6,11 +6,17 @@ import type { ApiResponse } from '@/types/api'
 import api from '@/lib/api'
 import { toast } from 'sonner'
 import axios from 'axios'
+import { isDemoMode } from '@/lib/demo/config'
+import { demoEvents } from '@/lib/demo/fixtures'
+import { rejectDemoWrite } from '@/lib/demo/actions'
 
 export function useCalendarEvents(start: string, end: string) {
   return useQuery({
     queryKey: ['events', start, end],
     queryFn: async () => {
+      if (isDemoMode) {
+        return demoEvents.filter((event) => event.startDate <= end && (event.endDate ?? event.startDate) >= start)
+      }
       const res = await api.get<ApiResponse<CalendarEvent[]>>('/api/events', {
         params: { start, end },
       })
@@ -25,6 +31,7 @@ export function useCreateEvent() {
 
   return useMutation({
     mutationFn: async (data: UpsertEventRequest) => {
+      if (isDemoMode) return rejectDemoWrite()
       const res = await api.post<ApiResponse<CalendarEvent>>('/api/events', data)
       if (!res.data.success) throw new Error(res.data.message)
       return res.data.data
@@ -48,6 +55,7 @@ export function useUpdateEvent() {
 
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: UpsertEventRequest }) => {
+      if (isDemoMode) return rejectDemoWrite()
       const res = await api.put<ApiResponse<CalendarEvent>>(`/api/events/${id}`, data)
       if (!res.data.success) throw new Error(res.data.message)
       return res.data.data
@@ -71,6 +79,7 @@ export function useDeleteEvent() {
 
   return useMutation({
     mutationFn: async (id: string) => {
+      if (isDemoMode) return rejectDemoWrite()
       const res = await api.delete<ApiResponse<boolean>>(`/api/events/${id}`)
       if (!res.data.success) throw new Error(res.data.message)
       return res.data.data

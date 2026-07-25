@@ -11,6 +11,15 @@ import type { ApiResponse } from '@/types/api'
 import type { UserInfo } from '@/types/auth'
 import { shouldRetryQuery } from '@/lib/queryRetry'
 import { MotionConfig } from 'framer-motion'
+import { isDemoMode } from '@/lib/demo/config'
+
+const demoUser: UserInfo = {
+  id: 'demo-viewer',
+  username: 'demo',
+  email: 'demo-viewer@example.invalid',
+  displayName: '展示訪客',
+  role: 'User',
+}
 
 interface ProvidersProps {
   children: React.ReactNode
@@ -36,6 +45,14 @@ export default function Providers({ children }: ProvidersProps) {
   /// 以 HttpOnly Cookie 還原登入狀態；瀏覽器端不保存任何 Token。
   useEffect(() => {
     let isMounted = true
+
+    if (isDemoMode) {
+      login(demoUser)
+      setHydrated(true)
+      return () => {
+        isMounted = false
+      }
+    }
 
     api.get<ApiResponse<UserInfo>>('/api/auth/me')
       .then(({ data }) => {

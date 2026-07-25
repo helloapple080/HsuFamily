@@ -5,8 +5,9 @@ import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import * as signalR from '@microsoft/signalr'
 import { apiBaseUrl } from '@/lib/api'
 import { useAuthStore } from '@/stores/authStore'
+import { isDemoMode } from '@/lib/demo/config'
 
-export type SignalRStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected'
+export type SignalRStatus = 'demo' | 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected'
 
 type EventCallback = (...args: unknown[]) => void
 type StatusListener = () => void
@@ -204,22 +205,31 @@ class SharedSignalRClient {
 }
 
 const sharedSignalRClient = new SharedSignalRClient()
+const demoSignalRClient: Pick<SharedSignalRClient, 'getStatus' | 'subscribeStatus' | 'acquire' | 'registerQueryClient' | 'subscribeEvent' | 'reconnect'> = {
+  getStatus: (): SignalRStatus => 'demo',
+  subscribeStatus: () => () => undefined,
+  acquire: (): (() => void) => () => undefined,
+  registerQueryClient: () => () => undefined,
+  subscribeEvent: () => () => undefined,
+  reconnect: async (): Promise<void> => undefined,
+}
 
 /// 共用 SignalR 連線與事件訂閱，在重連後同步 React Query cache。
 export function useSignalR() {
   const queryClient = useQueryClient()
+  const signalRClient = isDemoMode ? demoSignalRClient : sharedSignalRClient
   const status = useSyncExternalStore(
-    sharedSignalRClient.subscribeStatus,
-    sharedSignalRClient.getStatus,
-    sharedSignalRClient.getStatus
+    signalRClient.subscribeStatus,
+    signalRClient.getStatus,
+    signalRClient.getStatus
   )
 
-  useEffect(() => sharedSignalRClient.acquire(), [])
-  useEffect(() => sharedSignalRClient.registerQueryClient(queryClient), [queryClient])
+  useEffect(() => signalRClient.acquire(), [signalRClient])
+  useEffect(() => signalRClient.registerQueryClient(queryClient), [queryClient, signalRClient])
 
   const on = useCallback((event: string, callback: EventCallback) => (
-    sharedSignalRClient.subscribeEvent(event, callback)
-  ), [])
+    signalRClient.subscribeEvent(event, callback)
+  ), [signalRClient])
 
-  return { on, status, reconnect: sharedSignalRClient.reconnect }
+  return { on, status, reconnect: signalRClient.reconnect }
 }

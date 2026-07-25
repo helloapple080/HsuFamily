@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { connection } from 'next/server'
 import Providers from '@/components/layout/Providers'
+import { isDemoMode } from '@/lib/demo/config'
 import './globals.css'
 import 'sonner/dist/styles.css'
 
@@ -18,7 +19,8 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  await connection()
+  // 正式版需逐 request 產生 CSP nonce；靜態展示版沒有 request context。
+  if (!isDemoMode) await connection()
 
   return (
     <html
