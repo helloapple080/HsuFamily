@@ -63,6 +63,17 @@ public sealed class MediaRepository : IMediaRepository
     }
 
     /// <inheritdoc />
+    public async Task MarkCleanupCompleteAsync(
+        string id,
+        CancellationToken cancellationToken = default)
+    {
+        await _collection.UpdateOneAsync(
+            BuildCleanupCompleteFilter(id),
+            BuildCleanupCompleteUpdate(DateTime.UtcNow),
+            cancellationToken: cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task<List<MediaAsset>> GetPendingCleanupAsync(
         int limit,
         CancellationToken cancellationToken = default)
@@ -103,6 +114,21 @@ public sealed class MediaRepository : IMediaRepository
             .Set(asset => asset.DeletedAt, deletedAt)
             .Set(asset => asset.UpdatedAt, deletedAt)
             .Set(asset => asset.CleanupPending, true);
+    }
+
+    private static FilterDefinition<MediaAsset> BuildCleanupCompleteFilter(string id)
+    {
+        return Builders<MediaAsset>.Filter.And(
+            Builders<MediaAsset>.Filter.Eq(asset => asset.Id, id),
+            Builders<MediaAsset>.Filter.Ne(asset => asset.DeletedAt, null),
+            Builders<MediaAsset>.Filter.Eq(asset => asset.CleanupPending, true));
+    }
+
+    private static UpdateDefinition<MediaAsset> BuildCleanupCompleteUpdate(DateTime updatedAt)
+    {
+        return Builders<MediaAsset>.Update
+            .Set(asset => asset.CleanupPending, false)
+            .Set(asset => asset.UpdatedAt, updatedAt);
     }
 
     private static FilterDefinition<MediaAsset> BuildPendingCleanupFilter()

@@ -28,6 +28,11 @@ public interface IMediaRepository
         string id,
         CancellationToken cancellationToken = default);
 
+    /// <summary>將已軟刪除媒體的儲存清理狀態標記為完成。</summary>
+    Task MarkCleanupCompleteAsync(
+        string id,
+        CancellationToken cancellationToken = default);
+
     /// <summary>取得有上限且順序穩定的待清理媒體。</summary>
     Task<List<MediaAsset>> GetPendingCleanupAsync(
         int limit,

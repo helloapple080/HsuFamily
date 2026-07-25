@@ -123,6 +123,7 @@ public sealed class ArchitectureDependencyTests
             "CountActiveByOwnerAndPurposeAsync",
             "CreateAsync",
             "SoftDeleteAsync",
+            "MarkCleanupCompleteAsync",
             "GetPendingCleanupAsync"
         };
 
@@ -182,6 +183,29 @@ public sealed class ArchitectureDependencyTests
         Assert.Equal(deletedAt, setDocument["deletedAt"].ToUniversalTime());
         Assert.Equal(deletedAt, setDocument["updatedAt"].ToUniversalTime());
         Assert.True(setDocument["cleanupPending"].AsBoolean);
+    }
+
+    /// <summary>清理完成只能更新已軟刪除且尚待清理的媒體。</summary>
+    [Fact]
+    public void MediaRepository_CleanupCompleteUpdate_ClearsPendingDeletedAsset()
+    {
+        var assetId = ObjectId.GenerateNewId().ToString();
+        var filter = InvokeMediaDefinition<FilterDefinition<MediaAsset>>(
+            "BuildCleanupCompleteFilter",
+            assetId);
+        var update = InvokeMediaDefinition<UpdateDefinition<MediaAsset>>(
+            "BuildCleanupCompleteUpdate",
+            new DateTime(2026, 7, 25, 10, 0, 0, DateTimeKind.Utc));
+        var filterDocument = RenderFilter(filter);
+        var setDocument = RenderUpdate(update)["$set"].AsBsonDocument;
+
+        Assert.Equal(ObjectId.Parse(assetId), filterDocument["_id"].AsObjectId);
+        Assert.True(filterDocument["cleanupPending"].AsBoolean);
+        Assert.True(filterDocument["deletedAt"].AsBsonDocument.Contains("$ne"));
+        Assert.False(setDocument["cleanupPending"].AsBoolean);
+        Assert.Equal(
+            new DateTime(2026, 7, 25, 10, 0, 0, DateTimeKind.Utc),
+            setDocument["updatedAt"].ToUniversalTime());
     }
 
     /// <summary>待清理查詢必須有上限，並以刪除時間與 ID 穩定排序。</summary>
