@@ -203,7 +203,10 @@ public sealed class EventService(
             {
                 Type = request.Type,
                 Interval = request.Interval,
-                LunarDays = request.LunarDays is null ? null : [.. request.LunarDays]
+                LunarDays = request.LunarDays is null ? null : [.. request.LunarDays],
+                LeapMonthPolicy = request.LeapMonthPolicy,
+                EffectiveFrom = request.EffectiveFrom is { } effectiveFrom ? NormalizeUtc(effectiveFrom) : null,
+                EffectiveUntil = request.EffectiveUntil is { } effectiveUntil ? NormalizeUtc(effectiveUntil) : null
             };
 
     private static WorshipDetails? MapWorshipDetails(WorshipDetailsRequest? request) =>

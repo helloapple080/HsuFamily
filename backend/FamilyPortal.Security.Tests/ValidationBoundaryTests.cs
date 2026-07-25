@@ -122,6 +122,64 @@ public sealed class ValidationBoundaryTests
         }));
     }
 
+    /// <summary>週期規則應拒絕結束日期早於生效日期。</summary>
+    [Fact]
+    public void RecurrenceRuleRequest_RejectsEndBeforeStart()
+    {
+        var request = new RecurrenceRuleRequest
+        {
+            Type = RecurrenceType.LunarYearly,
+            EffectiveFrom = UtcDate(2036, 2, 1),
+            EffectiveUntil = UtcDate(2036, 1, 1)
+        };
+
+        Assert.False(IsValid(request));
+    }
+
+    /// <summary>週期規則應拒絕未正規化為 UTC 的有效日期。</summary>
+    [Fact]
+    public void RecurrenceRuleRequest_RejectsNonUtcEffectiveDates()
+    {
+        var request = new RecurrenceRuleRequest
+        {
+            Type = RecurrenceType.LunarYearly,
+            EffectiveFrom = new DateTime(2036, 1, 1),
+            EffectiveUntil = new DateTime(2036, 12, 31, 0, 0, 0, DateTimeKind.Local)
+        };
+
+        Assert.False(IsValid(request));
+    }
+
+    /// <summary>週期規則應拒絕未知閏月策略。</summary>
+    [Fact]
+    public void RecurrenceRuleRequest_RejectsInvalidLeapMonthPolicy()
+    {
+        var request = new RecurrenceRuleRequest
+        {
+            Type = RecurrenceType.LunarYearly,
+            LeapMonthPolicy = (LeapMonthPolicy)3
+        };
+
+        Assert.False(IsValid(request));
+    }
+
+    /// <summary>週期規則應限制農曆欄位搭配農曆月週期使用。</summary>
+    [Fact]
+    public void RecurrenceRuleRequest_RequiresLunarDaysOnlyForLunarMonthlyRules()
+    {
+        Assert.False(IsValid(new RecurrenceRuleRequest { Type = RecurrenceType.LunarMonthly }));
+        Assert.False(IsValid(new RecurrenceRuleRequest
+        {
+            Type = RecurrenceType.Yearly,
+            LunarDays = [1]
+        }));
+        Assert.False(IsValid(new RecurrenceRuleRequest
+        {
+            Type = RecurrenceType.Monthly,
+            LeapMonthPolicy = LeapMonthPolicy.Both
+        }));
+    }
+
     /// <summary>事件日期查詢應接受 62 天的精確上限。</summary>
     [Fact]
     public void EventRangeRequest_AcceptsExactlySixtyTwoDays()

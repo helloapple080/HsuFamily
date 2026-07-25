@@ -33,6 +33,13 @@ public sealed class RecurrenceRuleRequest : IValidatableObject
 
     public List<int>? LunarDays { get; set; }
 
+    [EnumDataType(typeof(LeapMonthPolicy), ErrorMessage = "閏月策略無效")]
+    public LeapMonthPolicy LeapMonthPolicy { get; set; } = LeapMonthPolicy.RegularOnly;
+
+    public DateTime? EffectiveFrom { get; set; }
+
+    public DateTime? EffectiveUntil { get; set; }
+
     /// <summary>驗證農曆日期清單的數量與每個值。</summary>
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
@@ -41,6 +48,42 @@ public sealed class RecurrenceRuleRequest : IValidatableObject
             yield return new ValidationResult(
                 $"週期間隔必須介於 1 至 {ValidationLimits.MaxRecurrenceInterval}",
                 [nameof(Interval)]);
+        }
+
+        if (!Enum.IsDefined(LeapMonthPolicy))
+        {
+            yield return new ValidationResult("閏月策略無效", [nameof(LeapMonthPolicy)]);
+        }
+
+        if (EffectiveFrom is { } effectiveFrom && effectiveFrom.Kind != DateTimeKind.Utc)
+        {
+            yield return new ValidationResult("生效日期必須使用 UTC", [nameof(EffectiveFrom)]);
+        }
+
+        if (EffectiveUntil is { } effectiveUntil && effectiveUntil.Kind != DateTimeKind.Utc)
+        {
+            yield return new ValidationResult("結束日期必須使用 UTC", [nameof(EffectiveUntil)]);
+        }
+
+        if (EffectiveFrom is { } from && EffectiveUntil is { } until && until < from)
+        {
+            yield return new ValidationResult("結束日期不可早於生效日期", [nameof(EffectiveUntil)]);
+        }
+
+        if (Type == RecurrenceType.LunarMonthly && LunarDays is not { Count: > 0 })
+        {
+            yield return new ValidationResult("農曆每月週期必須提供農曆日期", [nameof(LunarDays)]);
+        }
+
+        if (Type != RecurrenceType.LunarMonthly && LunarDays is not null)
+        {
+            yield return new ValidationResult("僅農曆每月週期可以提供農曆日期", [nameof(LunarDays)]);
+        }
+
+        if (Type is not (RecurrenceType.LunarYearly or RecurrenceType.LunarMonthly) &&
+            LeapMonthPolicy != LeapMonthPolicy.RegularOnly)
+        {
+            yield return new ValidationResult("僅農曆週期可以指定閏月策略", [nameof(LeapMonthPolicy)]);
         }
 
         if (LunarDays is null)
