@@ -359,6 +359,71 @@ public sealed class EventServiceTests
         Assert.Equal(new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc), recurrenceService.ExpansionRequests[0].Start);
     }
 
+    /// <summary>規則結束日當晚開始的跨日 occurrence 仍須回傳，同批不重疊 occurrence 則須排除。</summary>
+    [Fact]
+    public async Task GetByDateRangeAsync_ReturnsFinalEffectiveUntilOccurrenceOnlyWhenItOverlaps()
+    {
+        var effectiveUntil = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var finalRule = new Event
+        {
+            Id = "final-overnight-rule",
+            Title = "最後一晚祭典",
+            StartDate = new DateTime(2025, 1, 1, 23, 0, 0, DateTimeKind.Utc),
+            EndDate = new DateTime(2025, 1, 2, 2, 0, 0, DateTimeKind.Utc),
+            IsLunarDate = true,
+            LunarDate = new LunarDate { Year = 2025, Month = 1, Day = 1 },
+            RecurrenceRule = new RecurrenceRule
+            {
+                Type = RecurrenceType.LunarYearly,
+                EffectiveUntil = effectiveUntil
+            },
+            CreatedBy = "creator-1"
+        };
+        var expiredRule = new Event
+        {
+            Id = "expired-rule",
+            Title = "已結束祭典",
+            StartDate = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            EndDate = new DateTime(2025, 1, 1, 3, 0, 0, DateTimeKind.Utc),
+            IsLunarDate = true,
+            LunarDate = new LunarDate { Year = 2025, Month = 1, Day = 1 },
+            RecurrenceRule = new RecurrenceRule
+            {
+                Type = RecurrenceType.LunarYearly,
+                EffectiveUntil = effectiveUntil
+            },
+            CreatedBy = "creator-1"
+        };
+        var recurrenceService = new FakeLunarRecurrenceService
+        {
+            OccurrenceFactory = rule =>
+            [
+                OccurrenceFor(
+                    rule.Id,
+                    new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc))
+            ]
+        };
+        var service = new EventService(
+            new FakeEventRepository { RecurringRules = [finalRule, expiredRule] },
+            new FakeCalendarNotifier(),
+            recurrenceService);
+
+        var result = await service.GetByDateRangeAsync(
+            new EventRangeRequest
+            {
+                Start = new DateTime(2026, 1, 2, 0, 30, 0, DateTimeKind.Utc),
+                End = new DateTime(2026, 1, 2, 1, 0, 0, DateTimeKind.Utc)
+            },
+            CancellationToken.None);
+
+        var responses = Assert.IsAssignableFrom<IReadOnlyList<EventResponse>>(result.Value);
+        var only = Assert.Single(responses);
+        Assert.Equal("final-overnight-rule:2026-01-01", only.Id);
+        Assert.Equal(new DateTime(2026, 1, 1, 23, 0, 0, DateTimeKind.Utc), only.StartDate);
+        Assert.Equal(new DateTime(2026, 1, 2, 2, 0, 0, DateTimeKind.Utc), only.EndDate);
+        Assert.DoesNotContain(responses, response => response.SourceRuleId == "expired-rule");
+    }
+
     /// <summary>舊資料若含負期間，不得因此把 recurrence 展開起點錯誤向前移動。</summary>
     [Fact]
     public async Task GetByDateRangeAsync_DoesNotExpandBackForNegativeSourceDuration()

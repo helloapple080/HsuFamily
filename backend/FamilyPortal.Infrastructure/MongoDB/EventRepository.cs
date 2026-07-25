@@ -58,10 +58,11 @@ public class EventRepository : MongoRepository<Event>, IEventRepository
 
     private static FilterDefinition<Event> BuildRecurringRulesFilter(DateTime start, DateTime end)
     {
-        var effectiveStartDate = DateTime.SpecifyKind(start.Date, DateTimeKind.Utc);
         var effectiveEndOfDay = end.Date == DateTime.MaxValue.Date
             ? DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc)
             : DateTime.SpecifyKind(end.Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
+        // 這是無筆數上限的粗略候選查詢。不可用 EffectiveUntil 排除規則，因來源事件的正 duration
+        // 可能讓結束日當天開始的 occurrence 延伸並重疊後續查詢；精確判斷留給 Application 展開後處理。
         return Builders<Event>.Filter.And(
             Builders<Event>.Filter.Eq(e => e.IsLunarDate, true),
             Builders<Event>.Filter.Ne(e => e.RecurrenceRule, null),
@@ -71,10 +72,6 @@ public class EventRepository : MongoRepository<Event>, IEventRepository
             Builders<Event>.Filter.Or(
                 Builders<Event>.Filter.Eq(e => e.RecurrenceRule!.EffectiveFrom, null),
                 Builders<Event>.Filter.Lte(e => e.RecurrenceRule!.EffectiveFrom, effectiveEndOfDay)
-            ),
-            Builders<Event>.Filter.Or(
-                Builders<Event>.Filter.Eq(e => e.RecurrenceRule!.EffectiveUntil, null),
-                Builders<Event>.Filter.Gte(e => e.RecurrenceRule!.EffectiveUntil, effectiveStartDate)
             )
         );
     }

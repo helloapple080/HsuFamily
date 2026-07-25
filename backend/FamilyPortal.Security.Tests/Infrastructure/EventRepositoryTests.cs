@@ -11,9 +11,9 @@ namespace FamilyPortal.Security.Tests.Infrastructure;
 /// <summary>驗證事件 Repository 的 MongoDB 查詢契約。</summary>
 public sealed class EventRepositoryTests
 {
-    /// <summary>週期規則查詢只選農曆類型，且生效起訖以 UTC 日期含首尾比較。</summary>
+    /// <summary>粗略週期規則查詢只選農曆類型與已生效規則，不以結束日誤刪跨界事件。</summary>
     [Fact]
-    public void RecurringRulesFilter_UsesLunarTypesAndInclusiveUtcDates()
+    public void RecurringRulesFilter_UsesLunarTypesAndDoesNotFilterByEffectiveUntil()
     {
         var start = new DateTime(2026, 1, 2, 18, 0, 0, DateTimeKind.Utc);
         var end = new DateTime(2026, 1, 3, 8, 0, 0, DateTimeKind.Utc);
@@ -24,12 +24,10 @@ public sealed class EventRepositoryTests
         var typeValues = FindComparison(rendered, "recurrenceRule.Type", "$in").AsBsonArray;
         Assert.Equal(["LunarYearly", "LunarMonthly"], typeValues.Select(value => value.AsString));
         Assert.Equal(
-            new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc),
-            FindComparison(rendered, "recurrenceRule.EffectiveUntil", "$gte").ToUniversalTime());
-        Assert.Equal(
             new DateTime(2026, 1, 3, 23, 59, 59, 999, DateTimeKind.Utc),
             FindComparison(rendered, "recurrenceRule.EffectiveFrom", "$lte").ToUniversalTime());
         var renderedJson = rendered.ToJson();
+        Assert.DoesNotContain("recurrenceRule.EffectiveUntil", renderedJson);
         Assert.DoesNotContain("\"Yearly\"", renderedJson);
         Assert.DoesNotContain("\"Monthly\"", renderedJson);
     }

@@ -14,7 +14,7 @@ public interface IEventRepository : IRepository<Event>
         int limit,
         CancellationToken cancellationToken = default);
 
-    /// <summary>取得生效範圍與查詢期間重疊的週期規則。</summary>
+    /// <summary>粗略取得截至查詢結束日已生效的農曆週期規則；結束日與期間重疊由 Application 精確判斷。</summary>
     Task<List<Event>> GetRecurringRulesAsync(
         DateTime start,
         DateTime end,
