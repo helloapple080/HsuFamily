@@ -25,6 +25,8 @@ public class EventResponse
     public string CreatedBy { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+    public bool IsOccurrence { get; set; }
+    public string? SourceRuleId { get; set; }
 }
 
 /// <summary>建立/更新事件 DTO</summary>

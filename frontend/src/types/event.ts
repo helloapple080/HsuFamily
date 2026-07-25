@@ -6,11 +6,17 @@ export type EventType = 'General' | 'Birthday' | 'Festival' | 'Worship' | 'Anniv
 /// 週期類型
 export type RecurrenceType = 'Yearly' | 'Monthly' | 'LunarYearly' | 'LunarMonthly'
 
+/// 農曆閏月處理方式
+export type LeapMonthPolicy = 'RegularOnly' | 'LeapOnly' | 'Both'
+
 /// 週期規則
 export interface RecurrenceRule {
   type: RecurrenceType
   interval: number
   lunarDays?: number[] | null
+  leapMonthPolicy: LeapMonthPolicy
+  effectiveFrom?: string | null
+  effectiveUntil?: string | null
 }
 
 /// 拜拜細節
@@ -40,6 +46,8 @@ export interface CalendarEvent {
   createdBy: string
   createdAt: string
   updatedAt: string
+  isOccurrence?: boolean
+  sourceRuleId?: string | null
 }
 
 /// 建立/更新事件請求

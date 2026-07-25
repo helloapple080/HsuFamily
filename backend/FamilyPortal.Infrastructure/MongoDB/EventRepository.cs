@@ -42,6 +42,33 @@ public class EventRepository : MongoRepository<Event>, IEventRepository
     }
 
     /// <inheritdoc />
+    public async Task<List<Event>> GetRecurringRulesAsync(
+        DateTime start,
+        DateTime end,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        var filter = Builders<Event>.Filter.And(
+            Builders<Event>.Filter.Ne(e => e.RecurrenceRule, null),
+            Builders<Event>.Filter.Or(
+                Builders<Event>.Filter.Eq(e => e.RecurrenceRule!.EffectiveFrom, null),
+                Builders<Event>.Filter.Lte(e => e.RecurrenceRule!.EffectiveFrom, end)
+            ),
+            Builders<Event>.Filter.Or(
+                Builders<Event>.Filter.Eq(e => e.RecurrenceRule!.EffectiveUntil, null),
+                Builders<Event>.Filter.Gte(e => e.RecurrenceRule!.EffectiveUntil, start)
+            )
+        );
+
+        return await _collection
+            .Find(filter)
+            .SortBy(e => e.StartDate)
+            .ThenBy(e => e.Id)
+            .Limit(Math.Clamp(limit, 1, ValidationLimits.MaxPageSize))
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task<List<Event>> GetByEventTypeAsync(
         EventType eventType,
         int limit,

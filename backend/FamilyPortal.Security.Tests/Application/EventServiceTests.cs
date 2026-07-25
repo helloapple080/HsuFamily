@@ -3,6 +3,7 @@ using FamilyPortal.Application.Common;
 using FamilyPortal.Application.DTOs.Common;
 using FamilyPortal.Application.DTOs.Event;
 using FamilyPortal.Application.Interfaces;
+using FamilyPortal.Application.Models;
 using FamilyPortal.Application.Services;
 using FamilyPortal.Domain.Entities;
 using FamilyPortal.Domain.Enums;
@@ -20,7 +21,7 @@ public sealed class EventServiceTests
     {
         var repository = new FakeEventRepository();
         var notifier = new FakeCalendarNotifier();
-        var service = new EventService(repository, notifier);
+        var service = new EventService(repository, notifier, new FakeLunarRecurrenceService());
         var request = ValidRequest();
         request.StartDate = new DateTime(2026, 2, 17, 9, 0, 0, DateTimeKind.Local);
         request.EndDate = new DateTime(2026, 2, 17, 10, 0, 0, DateTimeKind.Local);
@@ -51,7 +52,7 @@ public sealed class EventServiceTests
     {
         var repository = new FakeEventRepository();
         var notifier = new FakeCalendarNotifier();
-        var service = new EventService(repository, notifier);
+        var service = new EventService(repository, notifier, new FakeLunarRecurrenceService());
 
         var result = await service.UpdateAsync(
             "missing",
@@ -81,7 +82,7 @@ public sealed class EventServiceTests
             }
         };
         var notifier = new FakeCalendarNotifier();
-        var service = new EventService(repository, notifier);
+        var service = new EventService(repository, notifier, new FakeLunarRecurrenceService());
         var request = ValidRequest();
         request.StartDate = DateTime.SpecifyKind(new DateTime(2026, 3, 1, 8, 0, 0), DateTimeKind.Unspecified);
 
@@ -104,7 +105,7 @@ public sealed class EventServiceTests
     {
         var repository = new FakeEventRepository();
         var notifier = new FakeCalendarNotifier();
-        var service = new EventService(repository, notifier);
+        var service = new EventService(repository, notifier, new FakeLunarRecurrenceService());
         var request = ValidRequest();
         request.EventType = "not-an-event-type";
 
@@ -124,7 +125,7 @@ public sealed class EventServiceTests
             Stored = new Event { Id = "event-1", Title = "待刪除", CreatedBy = "creator-1" }
         };
         var notifier = new FakeCalendarNotifier();
-        var service = new EventService(repository, notifier);
+        var service = new EventService(repository, notifier, new FakeLunarRecurrenceService());
 
         var result = await service.DeleteAsync("event-1", CancellationToken.None);
 
@@ -139,7 +140,7 @@ public sealed class EventServiceTests
     public async Task GetByDateRangeAsync_NormalizesRangeAndForwardsCancellationToken()
     {
         var repository = new FakeEventRepository();
-        var service = new EventService(repository, new FakeCalendarNotifier());
+        var service = new EventService(repository, new FakeCalendarNotifier(), new FakeLunarRecurrenceService());
         using var source = new CancellationTokenSource();
         var request = new EventRangeRequest
         {
@@ -154,6 +155,122 @@ public sealed class EventServiceTests
         Assert.Equal(DateTimeKind.Utc, repository.LastRange.Value.End.Kind);
         Assert.Equal(ValidationLimits.MaxPageSize, repository.LastRangeLimit);
         Assert.Equal(source.Token, repository.LastCancellationToken);
+    }
+
+    /// <summary>日期範圍查詢應合併已儲存事件與農曆 occurrence，並保留來源時間與期間。</summary>
+    [Fact]
+    public async Task GetByDateRangeAsync_MergesStoredEventsAndMappedLunarOccurrences()
+    {
+        var storedEvent = new Event
+        {
+            Id = "stored-1",
+            Title = "已儲存事件",
+            StartDate = new DateTime(2026, 9, 24, 0, 0, 0, DateTimeKind.Utc),
+            IsAllDay = true,
+            CreatedBy = "creator-1"
+        };
+        var recurringRule = new Event
+        {
+            Id = "rule-1",
+            Title = "中秋聚會",
+            StartDate = new DateTime(2025, 10, 6, 9, 0, 0, DateTimeKind.Utc),
+            EndDate = new DateTime(2025, 10, 6, 10, 30, 0, DateTimeKind.Utc),
+            IsLunarDate = true,
+            LunarDate = new LunarDate { Year = 2025, Month = 8, Day = 15 },
+            RecurrenceRule = new RecurrenceRule { Type = RecurrenceType.LunarYearly },
+            CreatedBy = "creator-1"
+        };
+        var repository = new FakeEventRepository
+        {
+            RangeEvents = [storedEvent],
+            RecurringRules = [recurringRule]
+        };
+        var recurrenceService = new FakeLunarRecurrenceService
+        {
+            Occurrences =
+            [
+                new LunarOccurrence
+                {
+                    Id = "rule-1:2026-09-25",
+                    SourceRuleId = "rule-1",
+                    SolarDate = new DateTime(2026, 9, 25, 0, 0, 0, DateTimeKind.Utc),
+                    LunarYear = 2026,
+                    LunarMonth = 8,
+                    LunarDay = 15
+                }
+            ]
+        };
+        var service = new EventService(repository, new FakeCalendarNotifier(), recurrenceService);
+        using var source = new CancellationTokenSource();
+
+        var result = await service.GetByDateRangeAsync(
+            new EventRangeRequest
+            {
+                Start = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc),
+                End = new DateTime(2026, 9, 30, 23, 59, 59, DateTimeKind.Utc)
+            },
+            source.Token);
+
+        Assert.True(result.IsSuccess);
+        Assert.Collection(
+            result.Value!,
+            stored =>
+            {
+                Assert.Equal("stored-1", stored.Id);
+                Assert.False(stored.IsOccurrence);
+                Assert.Null(stored.SourceRuleId);
+            },
+            occurrence =>
+            {
+                Assert.Equal("rule-1:2026-09-25", occurrence.Id);
+                Assert.True(occurrence.IsOccurrence);
+                Assert.Equal("rule-1", occurrence.SourceRuleId);
+                Assert.Equal(new DateTime(2026, 9, 25, 9, 0, 0, DateTimeKind.Utc), occurrence.StartDate);
+                Assert.Equal(new DateTime(2026, 9, 25, 10, 30, 0, DateTimeKind.Utc), occurrence.EndDate);
+                Assert.Equal("農曆八月十五", occurrence.LunarDate?.DisplayText);
+            });
+        Assert.Equal(source.Token, repository.LastRecurringCancellationToken);
+        Assert.Equal(ValidationLimits.MaxPageSize, repository.LastRecurringLimit);
+    }
+
+    /// <summary>同一日期已有穩定 occurrence 時，不應再輸出週期規則範本。</summary>
+    [Fact]
+    public async Task GetByDateRangeAsync_RemovesTemplateRepresentedByStableOccurrence()
+    {
+        var rule = new Event
+        {
+            Id = "rule-1",
+            Title = "初一祭祖",
+            StartDate = new DateTime(2026, 2, 17, 0, 0, 0, DateTimeKind.Utc),
+            IsAllDay = true,
+            IsLunarDate = true,
+            LunarDate = new LunarDate { Year = 2026, Month = 1, Day = 1 },
+            RecurrenceRule = new RecurrenceRule { Type = RecurrenceType.LunarYearly },
+            CreatedBy = "creator-1"
+        };
+        var occurrence = new LunarOccurrence
+        {
+            Id = "rule-1:2026-02-17",
+            SourceRuleId = "rule-1",
+            SolarDate = rule.StartDate,
+            LunarYear = 2026,
+            LunarMonth = 1,
+            LunarDay = 1
+        };
+        var repository = new FakeEventRepository { RangeEvents = [rule], RecurringRules = [rule] };
+        var recurrenceService = new FakeLunarRecurrenceService { Occurrences = [occurrence, occurrence] };
+        var service = new EventService(repository, new FakeCalendarNotifier(), recurrenceService);
+
+        var result = await service.GetByDateRangeAsync(
+            new EventRangeRequest
+            {
+                Start = new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc),
+                End = new DateTime(2026, 2, 28, 23, 59, 59, DateTimeKind.Utc)
+            },
+            CancellationToken.None);
+
+        var only = Assert.Single(result.Value!);
+        Assert.Equal("rule-1:2026-02-17", only.Id);
     }
 
     /// <summary>讀取事件時應複製農曆資料並忽略資料庫內不可信的顯示文字。</summary>
@@ -176,7 +293,7 @@ public sealed class EventServiceTests
                 }
             }
         };
-        var service = new EventService(repository, new FakeCalendarNotifier());
+        var service = new EventService(repository, new FakeCalendarNotifier(), new FakeLunarRecurrenceService());
 
         var result = await service.GetByIdAsync("event-1", CancellationToken.None);
 
@@ -209,7 +326,7 @@ public sealed class EventServiceTests
                 }
             }
         };
-        var service = new EventService(repository, new FakeCalendarNotifier());
+        var service = new EventService(repository, new FakeCalendarNotifier(), new FakeLunarRecurrenceService());
 
         var result = await service.GetByIdAsync("event-1", CancellationToken.None);
 
@@ -222,7 +339,7 @@ public sealed class EventServiceTests
     public async Task ListQueries_RequestExactlyMaximumPageSize()
     {
         var repository = new FakeEventRepository();
-        var service = new EventService(repository, new FakeCalendarNotifier());
+        var service = new EventService(repository, new FakeCalendarNotifier(), new FakeLunarRecurrenceService());
 
         await service.GetByTypeAsync(nameof(EventType.General), CancellationToken.None);
         await service.GetByLunarDateAsync(1, 1, CancellationToken.None);
@@ -268,6 +385,10 @@ public sealed class EventServiceTests
         public int LastTypeLimit { get; private set; }
         public int LastLunarLimit { get; private set; }
         public CancellationToken LastCancellationToken { get; private set; }
+        public List<Event> RangeEvents { get; init; } = [];
+        public List<Event> RecurringRules { get; init; } = [];
+        public int LastRecurringLimit { get; private set; }
+        public CancellationToken LastRecurringCancellationToken { get; private set; }
 
         /// <inheritdoc />
         public Task<Event?> GetByIdAsync(string id, CancellationToken cancellationToken = default)
@@ -334,7 +455,19 @@ public sealed class EventServiceTests
             LastRange = (start, end);
             LastRangeLimit = limit;
             LastCancellationToken = cancellationToken;
-            return Task.FromResult(new List<Event>());
+            return Task.FromResult(RangeEvents);
+        }
+
+        /// <inheritdoc />
+        public Task<List<Event>> GetRecurringRulesAsync(
+            DateTime start,
+            DateTime end,
+            int limit,
+            CancellationToken cancellationToken = default)
+        {
+            LastRecurringLimit = limit;
+            LastRecurringCancellationToken = cancellationToken;
+            return Task.FromResult(RecurringRules);
         }
 
         /// <inheritdoc />
@@ -362,6 +495,22 @@ public sealed class EventServiceTests
         {
             LastLunarLimit = limit;
             return Task.FromResult(new List<Event>());
+        }
+    }
+
+    private sealed class FakeLunarRecurrenceService : ILunarRecurrenceService
+    {
+        public IReadOnlyList<LunarOccurrence> Occurrences { get; init; } = [];
+
+        /// <inheritdoc />
+        public Task<IReadOnlyList<LunarOccurrence>> ExpandAsync(
+            Event rule,
+            DateTime rangeStart,
+            DateTime rangeEnd,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(Occurrences);
         }
     }
 }

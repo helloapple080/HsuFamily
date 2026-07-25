@@ -14,6 +14,13 @@ public interface IEventRepository : IRepository<Event>
         int limit,
         CancellationToken cancellationToken = default);
 
+    /// <summary>取得生效範圍與查詢期間重疊的週期規則。</summary>
+    Task<List<Event>> GetRecurringRulesAsync(
+        DateTime start,
+        DateTime end,
+        int limit,
+        CancellationToken cancellationToken = default);
+
     /// <summary>根據事件類型取得事件</summary>
     Task<List<Event>> GetByEventTypeAsync(
         Domain.Enums.EventType eventType,

@@ -2,6 +2,7 @@ using FamilyPortal.Application.Common;
 using FamilyPortal.Application.DTOs.Common;
 using FamilyPortal.Application.DTOs.Event;
 using FamilyPortal.Application.Interfaces;
+using FamilyPortal.Application.Models;
 using FamilyPortal.Domain.Enums;
 using FamilyPortal.Domain.ValueObjects;
 using DomainEvent = FamilyPortal.Domain.Entities.Event;
@@ -11,21 +12,59 @@ namespace FamilyPortal.Application.Services;
 /// <summary>協調事件資料存取、輸入正規化與行事曆通知。</summary>
 public sealed class EventService(
     IEventRepository eventRepository,
-    ICalendarNotifier calendarNotifier) : IEventService
+    ICalendarNotifier calendarNotifier,
+    ILunarRecurrenceService lunarRecurrenceService) : IEventService
 {
     /// <inheritdoc />
     public async Task<ServiceResult<IReadOnlyList<EventResponse>>> GetByDateRangeAsync(
         EventRangeRequest request,
         CancellationToken cancellationToken)
     {
+        var rangeStart = NormalizeUtc(request.Start);
+        var rangeEnd = NormalizeUtc(request.End);
         var events = await eventRepository.GetByDateRangeAsync(
-            NormalizeUtc(request.Start),
-            NormalizeUtc(request.End),
+            rangeStart,
+            rangeEnd,
+            ValidationLimits.MaxPageSize,
+            cancellationToken);
+        var recurringRules = await eventRepository.GetRecurringRulesAsync(
+            rangeStart,
+            rangeEnd,
             ValidationLimits.MaxPageSize,
             cancellationToken);
 
+        var occurrenceResponses = new List<EventResponse>();
+        foreach (var rule in recurringRules)
+        {
+            var occurrences = await lunarRecurrenceService.ExpandAsync(
+                rule,
+                rangeStart.Date,
+                rangeEnd.Date,
+                cancellationToken);
+            occurrenceResponses.AddRange(
+                occurrences
+                    .Select(occurrence => MapOccurrenceToResponse(rule, occurrence))
+                    .Where(response => OverlapsRange(response, rangeStart, rangeEnd)));
+        }
+
+        var representedTemplates = occurrenceResponses
+            .Select(response => (response.SourceRuleId!, response.StartDate))
+            .ToHashSet();
+        var storedResponses = events
+            .Where(evt => evt.RecurrenceRule is null ||
+                          !representedTemplates.Contains((evt.Id, ComparableTemplateStart(evt))))
+            .Select(MapToResponse);
+        var merged = storedResponses
+            .Concat(occurrenceResponses)
+            .GroupBy(response => response.Id, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .OrderBy(response => response.StartDate)
+            .ThenBy(response => response.Id, StringComparer.Ordinal)
+            .Take(ValidationLimits.MaxPageSize)
+            .ToList();
+
         return ServiceResult<IReadOnlyList<EventResponse>>.Success(
-            events.Select(MapToResponse).ToList());
+            merged);
     }
 
     /// <inheritdoc />
@@ -238,8 +277,53 @@ public sealed class EventService(
         Color = evt.Color,
         CreatedBy = evt.CreatedBy,
         CreatedAt = evt.CreatedAt,
-        UpdatedAt = evt.UpdatedAt
+        UpdatedAt = evt.UpdatedAt,
+        IsOccurrence = false,
+        SourceRuleId = null
     };
+
+    private static EventResponse MapOccurrenceToResponse(
+        DomainEvent source,
+        LunarOccurrence occurrence)
+    {
+        var response = MapToResponse(source);
+        var occurrenceDate = DateTime.SpecifyKind(occurrence.SolarDate.Date, DateTimeKind.Utc);
+        var occurrenceStart = source.IsAllDay
+            ? occurrenceDate
+            : occurrenceDate.Add(source.StartDate.TimeOfDay);
+
+        response.Id = occurrence.Id;
+        response.SourceRuleId = source.Id;
+        response.IsOccurrence = true;
+        response.StartDate = occurrenceStart;
+        response.EndDate = source.EndDate is { } sourceEnd
+            ? occurrenceStart.Add(sourceEnd - source.StartDate)
+            : null;
+        response.LunarDate = new LunarDate
+        {
+            Year = occurrence.LunarYear,
+            Month = occurrence.LunarMonth,
+            Day = occurrence.LunarDay,
+            IsLeapMonth = occurrence.IsLeapMonth,
+            DisplayText = FormatLunarDate(
+                occurrence.LunarMonth,
+                occurrence.LunarDay,
+                occurrence.IsLeapMonth)
+        };
+        return response;
+    }
+
+    private static bool OverlapsRange(
+        EventResponse response,
+        DateTime rangeStart,
+        DateTime rangeEnd) =>
+        response.StartDate <= rangeEnd &&
+        (response.EndDate ?? response.StartDate) >= rangeStart;
+
+    private static DateTime ComparableTemplateStart(DomainEvent evt) =>
+        evt.IsAllDay
+            ? DateTime.SpecifyKind(evt.StartDate.Date, DateTimeKind.Utc)
+            : evt.StartDate;
 
     private static DateTime NormalizeUtc(DateTime value) => value.ToUniversalTime();
 
