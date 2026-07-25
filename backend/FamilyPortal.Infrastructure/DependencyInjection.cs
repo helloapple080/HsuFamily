@@ -1,4 +1,5 @@
 using FamilyPortal.Application.Interfaces;
+using FamilyPortal.Infrastructure.Calendar;
 using FamilyPortal.Infrastructure.Hubs;
 using FamilyPortal.Infrastructure.MongoDB;
 using FamilyPortal.Infrastructure.Security;
@@ -13,6 +14,10 @@ namespace FamilyPortal.Infrastructure;
 /// </summary>
 public static class DependencyInjection
 {
+    /// <summary>註冊資料存取、行事曆與安全性基礎設施服務。</summary>
+    /// <param name="services">服務集合。</param>
+    /// <param name="configuration">應用程式設定。</param>
+    /// <returns>相同的服務集合，供連鎖註冊使用。</returns>
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services,
         IConfiguration configuration)
@@ -29,6 +34,7 @@ public static class DependencyInjection
         services.AddScoped<IEventRepository, EventRepository>();
         services.AddScoped<IItineraryRepository, ItineraryRepository>();
         services.AddScoped<ICalendarNotifier, SignalRCalendarNotifier>();
+        services.AddScoped<ILunarRecurrenceService, LunarRecurrenceService>();
 
         // Security Services
         services.Configure<JwtSettings>(
