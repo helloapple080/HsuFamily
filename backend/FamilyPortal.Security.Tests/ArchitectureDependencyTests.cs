@@ -19,6 +19,9 @@ public sealed class ArchitectureDependencyTests
     private static readonly Regex InfrastructureReferencePattern = new(
         @"(?<![\p{L}\p{N}\p{M}_])FamilyPortal\.Infrastructure(?![\p{L}\p{N}\p{M}_])",
         RegexOptions.CultureInvariant);
+    private static readonly Regex GoogleReferencePattern = new(
+        @"(?<![\p{L}\p{N}\p{M}_])Google(?=\.|::)",
+        RegexOptions.CultureInvariant);
 
     private readonly record struct StringLiteralStart(
         int QuoteIndex,
@@ -28,7 +31,7 @@ public sealed class ArchitectureDependencyTests
 
     /// <summary>媒體 Domain 不得引用任何 Google 命名空間或套件。</summary>
     [Fact]
-    public void MediaDomain_MustNotReferenceGoogleNamespaces()
+    public void MediaDomain_MustNotReferenceGoogleNamespacesOrPackages()
     {
         var domainFiles = Directory.GetFiles(
                 DomainSourcePath(),
@@ -40,10 +43,54 @@ public sealed class ArchitectureDependencyTests
         {
             var source = File.ReadAllText(file);
 
-            Assert.DoesNotMatch(
-                new Regex(@"^\s*(?:global\s+)?using\s+Google(?:\.|;)", RegexOptions.Multiline),
-                source);
+            Assert.False(
+                ContainsGoogleReference(source),
+                $"Domain source '{file}' directly references a Google namespace.");
         }
+
+        var packageNames = PackageReferenceNames(XDocument.Load(DomainProjectPath()));
+        Assert.DoesNotContain(packageNames, IsGooglePackageReference);
+    }
+
+    /// <summary>Google 參考偵測應支援 alias 與完整名稱，並忽略註解與字串。</summary>
+    /// <param name="source">要檢查的 C# 原始碼。</param>
+    /// <param name="expected">是否應偵測到 Google 參考。</param>
+    [Theory]
+    [MemberData(nameof(GoogleReferenceSources))]
+    public void MediaSource_ContainsGoogleReference_RecognizesOnlyCode(
+        string source,
+        bool expected)
+    {
+        Assert.Equal(expected, ContainsGoogleReference(source));
+    }
+
+    /// <summary>提供 Google 命名空間參考的回歸案例。</summary>
+    public static TheoryData<string, bool> GoogleReferenceSources => new()
+    {
+        { "using Drive = Google.Apis.Drive.v3;", true },
+        { "var service = new Google.Apis.Drive.v3.DriveService();", true },
+        { "var service = new global::Google.Apis.Drive.v3.DriveService();", true },
+        { "var service = new Google::Apis.Drive.v3.DriveService();", true },
+        { "/* Google.Apis.Drive.v3 */ var value = 1;", false },
+        { "var packageName = \"Google.Apis.Drive.v3\";", false }
+    };
+
+    /// <summary>Domain 專案的 Google 套件偵測應以不區分大小寫的套件 ID 判斷。</summary>
+    /// <param name="packageId">套件 ID。</param>
+    /// <param name="expected">是否應視為 Google 套件。</param>
+    [Theory]
+    [InlineData("Google.Apis.Drive.v3", true)]
+    [InlineData("google.apis.auth", true)]
+    [InlineData("MongoDB.Bson", false)]
+    public void MediaProject_GooglePackageDetection_UsesPackageReferenceIncludes(
+        string packageId,
+        bool expected)
+    {
+        var project = XDocument.Parse(
+            $"<Project><ItemGroup><PackageReference Include=\"{packageId}\" /></ItemGroup></Project>");
+        var packageNames = PackageReferenceNames(project);
+
+        Assert.Equal(expected, packageNames.Any(IsGooglePackageReference));
     }
 
     /// <summary>媒體列舉欄位必須使用字串格式寫入 MongoDB。</summary>
@@ -278,6 +325,37 @@ public sealed class ArchitectureDependencyTests
     private static bool ContainsInfrastructureReference(string source)
     {
         return InfrastructureReferencePattern.IsMatch(SanitizeSource(source));
+    }
+
+    private static bool ContainsGoogleReference(string source)
+    {
+        return GoogleReferencePattern.IsMatch(SanitizeSource(source));
+    }
+
+    private static IReadOnlyList<string> PackageReferenceNames(XDocument projectDocument)
+    {
+        var includes = projectDocument
+            .Descendants()
+            .Where(element => string.Equals(
+                element.Name.LocalName,
+                "PackageReference",
+                StringComparison.Ordinal))
+            .Select(element => element.Attribute("Include")?.Value)
+            .ToArray();
+
+        if (includes.Any(string.IsNullOrWhiteSpace))
+        {
+            throw new InvalidDataException(
+                "Every PackageReference must declare a non-empty Include attribute.");
+        }
+
+        return includes.Select(include => include!.Trim()).ToArray();
+    }
+
+    private static bool IsGooglePackageReference(string packageId)
+    {
+        return string.Equals(packageId, "Google", StringComparison.OrdinalIgnoreCase) ||
+            packageId.StartsWith("Google.", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string SanitizeSource(string source)
@@ -897,6 +975,15 @@ public sealed class ArchitectureDependencyTests
     private static string DomainSourcePath()
     {
         return Path.Combine(RepositoryRootPath(), "backend", "FamilyPortal.Domain");
+    }
+
+    private static string DomainProjectPath()
+    {
+        return Path.Combine(
+            RepositoryRootPath(),
+            "backend",
+            "FamilyPortal.Domain",
+            "FamilyPortal.Domain.csproj");
     }
 
     private static string ApplicationProjectPath()
