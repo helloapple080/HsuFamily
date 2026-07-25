@@ -48,11 +48,11 @@
 ```tsx
 it('offers light, dark and system themes', async () => {
   render(<ThemeSwitcher />)
-  expect(screen.getByRole('button', { name: '切換顯示主題' })).toBeInTheDocument()
-  await user.click(screen.getByRole('button', { name: '切換顯示主題' }))
-  expect(screen.getByText('淺色')).toBeInTheDocument()
-  expect(screen.getByText('深色')).toBeInTheDocument()
-  expect(screen.getByText('跟隨系統')).toBeInTheDocument()
+  expect(screen.getByRole('group', { name: '切換顯示主題' })).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: '淺色' }))
+  expect(setTheme).toHaveBeenCalledWith('light')
+  expect(screen.getByRole('button', { name: '深色' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '跟隨系統' })).toBeInTheDocument()
 })
 ```
 
