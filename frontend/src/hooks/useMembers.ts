@@ -6,11 +6,15 @@ import type { ApiResponse } from '@/types/api'
 import api from '@/lib/api'
 import { toast } from 'sonner'
 import axios from 'axios'
+import { isDemoMode } from '@/lib/demo/config'
+import { demoMembers } from '@/lib/demo/fixtures'
+import { rejectDemoWrite } from '@/lib/demo/actions'
 
 export function useMembers() {
   return useQuery({
     queryKey: ['members'],
     queryFn: async () => {
+      if (isDemoMode) return [...demoMembers]
       const res = await api.get<ApiResponse<Member[]>>('/api/members')
       if (!res.data.success) throw new Error(res.data.message)
       return res.data.data ?? []
@@ -23,6 +27,7 @@ export function useCreateMember() {
 
   return useMutation({
     mutationFn: async (data: UpsertMemberRequest) => {
+      if (isDemoMode) return rejectDemoWrite()
       const res = await api.post<ApiResponse<Member>>('/api/members', data)
       if (!res.data.success) throw new Error(res.data.message)
       return res.data.data
@@ -46,6 +51,7 @@ export function useUpdateMember() {
 
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: UpsertMemberRequest }) => {
+      if (isDemoMode) return rejectDemoWrite()
       const res = await api.put<ApiResponse<Member>>(`/api/members/${id}`, data)
       if (!res.data.success) throw new Error(res.data.message)
       return res.data.data
@@ -69,6 +75,7 @@ export function useDeleteMember() {
 
   return useMutation({
     mutationFn: async (id: string) => {
+      if (isDemoMode) return rejectDemoWrite()
       const res = await api.delete<ApiResponse<boolean>>(`/api/members/${id}`)
       if (!res.data.success) throw new Error(res.data.message)
       return res.data.data
