@@ -21,6 +21,7 @@ import {
 import ConnectionStatus from '@/components/common/ConnectionStatus'
 import { useSignalR } from '@/hooks/useSignalR'
 import DemoModeBanner from '@/components/common/DemoModeBanner'
+import ThemeSwitcher from '@/components/theme/ThemeSwitcher'
 import { isDemoMode } from '@/lib/demo/config'
 
 const navItems = [
@@ -134,6 +135,7 @@ export default function PortalLayout({ children }: PortalLayoutProps) {
               </Badge>
             </div>
           </div>
+          <ThemeSwitcher />
           <Button variant="ghost" className="min-h-11 w-full justify-start text-[var(--muted-foreground)] hover:text-[var(--destructive)]" onClick={handleLogout}>
             <LogOut aria-hidden="true" />
             登出
@@ -160,6 +162,7 @@ export default function PortalLayout({ children }: PortalLayoutProps) {
           {navigation(true)}
           <div className="border-t border-[var(--glass-border)] p-4">
             <p className="mb-3 truncate text-sm">{user?.displayName}</p>
+            <ThemeSwitcher />
             <Button variant="outline" className="min-h-11 w-full" onClick={handleLogout}>
               <LogOut aria-hidden="true" />
               登出

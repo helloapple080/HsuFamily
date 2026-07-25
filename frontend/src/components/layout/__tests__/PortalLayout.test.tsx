@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import PortalLayout from '@/components/layout/PortalLayout'
 import { useAuthStore } from '@/stores/authStore'
@@ -28,5 +29,14 @@ describe('PortalLayout', () => {
     expect(screen.getByRole('navigation', { name: '主要導覽' })).toBeVisible()
     expect(screen.getAllByRole('link', { name: /行事曆/ })[0]).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('main')).toHaveAttribute('id', 'main-content')
+  })
+
+  it('mounts theme controls in desktop and mobile user sections', async () => {
+    const user = userEvent.setup()
+    render(<PortalLayout><p>內容</p></PortalLayout>)
+
+    await user.click(screen.getByRole('button', { name: '開啟導覽選單' }))
+
+    expect(screen.getAllByRole('group', { name: '切換顯示主題', hidden: true })).toHaveLength(2)
   })
 })
