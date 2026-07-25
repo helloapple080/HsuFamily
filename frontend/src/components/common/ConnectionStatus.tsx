@@ -14,6 +14,10 @@ interface ConnectionStatusProps {
 export default function ConnectionStatus({ status, reconnect }: ConnectionStatusProps) {
   const [isRetrying, setIsRetrying] = useState(false)
 
+  if (status === 'demo') {
+    return <p className="text-xs text-[var(--muted-foreground)]">即時狀態：展示資料</p>
+  }
+
   if (status === 'idle' || status === 'connected') return null
 
   if (status === 'connecting' || status === 'reconnecting') {

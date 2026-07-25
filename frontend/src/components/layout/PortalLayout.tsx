@@ -20,6 +20,8 @@ import {
 } from '@/components/ui/sheet'
 import ConnectionStatus from '@/components/common/ConnectionStatus'
 import { useSignalR } from '@/hooks/useSignalR'
+import DemoModeBanner from '@/components/common/DemoModeBanner'
+import { isDemoMode } from '@/lib/demo/config'
 
 const navItems = [
   { href: '/calendar', label: '行事曆', icon: CalendarDays, description: '國農曆雙顯示' },
@@ -40,10 +42,16 @@ export default function PortalLayout({ children }: PortalLayoutProps) {
   const { status: signalRStatus, reconnect: reconnectSignalR } = useSignalR()
 
   useEffect(() => {
-    if (isHydrated && !isAuthenticated) router.replace('/login')
+    if (!isDemoMode && isHydrated && !isAuthenticated) router.replace('/login')
   }, [isAuthenticated, isHydrated, router])
 
   const handleLogout = async () => {
+    if (isDemoMode) {
+      toast.info('公開展示模式不需要登入或登出')
+      router.push('/calendar')
+      return
+    }
+
     try {
       await api.post('/api/auth/logout')
     } catch {
@@ -162,6 +170,7 @@ export default function PortalLayout({ children }: PortalLayoutProps) {
 
       <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 pt-16 md:ml-64 md:pt-0">
         <div className="space-y-4 p-4 sm:p-6 lg:p-8">
+          {isDemoMode && <DemoModeBanner />}
           <ConnectionStatus status={signalRStatus} reconnect={reconnectSignalR} />
           {children}
         </div>
