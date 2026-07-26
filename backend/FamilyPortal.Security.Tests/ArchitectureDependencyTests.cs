@@ -52,6 +52,50 @@ public sealed class ArchitectureDependencyTests
         Assert.DoesNotContain(packageNames, IsGooglePackageReference);
     }
 
+    /// <summary>媒體 Application 不得引用任何 Google 命名空間或套件。</summary>
+    [Fact]
+    public void MediaApplication_MustNotReferenceGoogleNamespacesOrPackages()
+    {
+        var applicationFiles = Directory.GetFiles(
+                ApplicationSourcePath(),
+                "*.cs",
+                SearchOption.AllDirectories)
+            .Where(file => !Path.GetFileName(file).StartsWith("._", StringComparison.Ordinal));
+
+        foreach (var file in applicationFiles)
+        {
+            Assert.False(
+                ContainsGoogleReference(File.ReadAllText(file)),
+                $"Application source '{file}' directly references a Google namespace.");
+        }
+
+        Assert.DoesNotContain(
+            PackageReferenceNames(XDocument.Load(ApplicationProjectPath())),
+            IsGooglePackageReference);
+    }
+
+    /// <summary>Google Drive SDK 必須只以指定版本直接安裝於 Infrastructure。</summary>
+    [Fact]
+    public void GoogleDrivePackage_MustBeExactlyPinnedInInfrastructureOnly()
+    {
+        var infrastructure = XDocument.Load(InfrastructureProjectPath());
+        var package = Assert.Single(
+            infrastructure.Descendants(),
+            element => element.Name.LocalName == "PackageReference" &&
+                string.Equals(
+                    element.Attribute("Include")?.Value,
+                    "Google.Apis.Drive.v3",
+                    StringComparison.OrdinalIgnoreCase));
+
+        Assert.Equal("1.75.0.4210", package.Attribute("Version")?.Value);
+        Assert.DoesNotContain(
+            PackageReferenceNames(XDocument.Load(ApplicationProjectPath())),
+            IsGooglePackageReference);
+        Assert.DoesNotContain(
+            PackageReferenceNames(XDocument.Load(DomainProjectPath())),
+            IsGooglePackageReference);
+    }
+
     /// <summary>Google 參考偵測應支援 alias 與完整名稱，並忽略註解與字串。</summary>
     /// <param name="source">要檢查的 C# 原始碼。</param>
     /// <param name="expected">是否應偵測到 Google 參考。</param>
@@ -1010,6 +1054,20 @@ public sealed class ArchitectureDependencyTests
     private static string DomainSourcePath()
     {
         return Path.Combine(RepositoryRootPath(), "backend", "FamilyPortal.Domain");
+    }
+
+    private static string ApplicationSourcePath()
+    {
+        return Path.Combine(RepositoryRootPath(), "backend", "FamilyPortal.Application");
+    }
+
+    private static string InfrastructureProjectPath()
+    {
+        return Path.Combine(
+            RepositoryRootPath(),
+            "backend",
+            "FamilyPortal.Infrastructure",
+            "FamilyPortal.Infrastructure.csproj");
     }
 
     private static string DomainProjectPath()

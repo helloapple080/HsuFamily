@@ -27,6 +27,22 @@ public static class ProductionSecurityOptions
         {
             throw new InvalidOperationException("Production AllowedOrigins 必須全部使用 HTTPS。");
         }
+
+        if (configuration.GetValue<bool>("GoogleDrive:Enabled"))
+        {
+            var requiredSettings = new[]
+            {
+                "ClientId",
+                "ClientSecret",
+                "RefreshToken",
+                "FolderId"
+            };
+            if (requiredSettings.Any(setting =>
+                    string.IsNullOrWhiteSpace(configuration[$"GoogleDrive:{setting}"])))
+            {
+                throw new InvalidOperationException("Production Google Drive 設定不完整。");
+            }
+        }
     }
 
     private static bool IsSecureOrigin(string origin)

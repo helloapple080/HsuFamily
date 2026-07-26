@@ -47,6 +47,29 @@ public sealed class UnavailableMediaStorageTests
         Assert.IsType<FakeMediaStorage>(scope.ServiceProvider.GetRequiredService<IMediaStorage>());
     }
 
+    /// <summary>啟用 Google Drive 時 DI 必須以 Google adapter 取代 unavailable fallback。</summary>
+    [Fact]
+    public void GoogleDriveEnabled_ResolvesGoogleAdapter()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["GoogleDrive:Enabled"] = "true",
+                ["GoogleDrive:ClientId"] = "client-id",
+                ["GoogleDrive:ClientSecret"] = "client-secret",
+                ["GoogleDrive:RefreshToken"] = "refresh-token",
+                ["GoogleDrive:FolderId"] = "folder-id"
+            })
+            .Build();
+        var services = new ServiceCollection();
+        services.AddInfrastructure(configuration);
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        Assert.IsType<GoogleDriveMediaStorage>(
+            scope.ServiceProvider.GetRequiredService<IMediaStorage>());
+    }
+
     private sealed class FakeMediaStorage : IMediaStorage
     {
         /// <inheritdoc />

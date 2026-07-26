@@ -166,4 +166,58 @@ public sealed class ProductionConfigurationTests
 
         ProductionSecurityOptions.Validate(configuration, Environments.Production);
     }
+
+    /// <summary>正式環境啟用 Google Drive 時，任一 OAuth 或資料夾設定缺漏都必須拒絕啟動。</summary>
+    [Theory]
+    [InlineData("ClientId")]
+    [InlineData("ClientSecret")]
+    [InlineData("RefreshToken")]
+    [InlineData("FolderId")]
+    public void ValidateProduction_GoogleDriveEnabledRejectsMissingCredential(string missingKey)
+    {
+        var values = ValidGoogleDriveProductionSettings();
+        values[$"GoogleDrive:{missingKey}"] = " ";
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+
+        Assert.Throws<InvalidOperationException>(() =>
+            ProductionSecurityOptions.Validate(configuration, Environments.Production));
+    }
+
+    /// <summary>正式環境明確停用 Google Drive 時不需要真實 OAuth 憑證。</summary>
+    [Fact]
+    public void ValidateProduction_GoogleDriveDisabledAcceptsMissingCredentials()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["SecuritySettings:CookieSecure"] = "true",
+                ["AllowedOrigins:0"] = "https://family.example",
+                ["GoogleDrive:Enabled"] = "false"
+            })
+            .Build();
+
+        ProductionSecurityOptions.Validate(configuration, Environments.Production);
+    }
+
+    /// <summary>正式環境啟用 Google Drive 且設定完整時應允許啟動。</summary>
+    [Fact]
+    public void ValidateProduction_GoogleDriveEnabledAcceptsCompleteCredentials()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(ValidGoogleDriveProductionSettings())
+            .Build();
+
+        ProductionSecurityOptions.Validate(configuration, Environments.Production);
+    }
+
+    private static Dictionary<string, string?> ValidGoogleDriveProductionSettings() => new()
+    {
+        ["SecuritySettings:CookieSecure"] = "true",
+        ["AllowedOrigins:0"] = "https://family.example",
+        ["GoogleDrive:Enabled"] = "true",
+        ["GoogleDrive:ClientId"] = "client-id",
+        ["GoogleDrive:ClientSecret"] = "client-secret",
+        ["GoogleDrive:RefreshToken"] = "refresh-token",
+        ["GoogleDrive:FolderId"] = "folder-id"
+    };
 }

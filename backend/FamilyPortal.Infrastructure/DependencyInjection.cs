@@ -7,6 +7,7 @@ using FamilyPortal.Infrastructure.Security;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace FamilyPortal.Infrastructure;
 
@@ -37,7 +38,19 @@ public static class DependencyInjection
         services.AddScoped<IItineraryRepository, ItineraryRepository>();
         services.AddScoped<IMediaRepository, MediaRepository>();
         services.AddSingleton<IImageInspector, SkiaImageInspector>();
-        services.TryAddScoped<IMediaStorage, UnavailableMediaStorage>();
+        services.Configure<GoogleDriveOptions>(
+            configuration.GetSection(GoogleDriveOptions.SectionName));
+        if (configuration.GetValue<bool>($"{GoogleDriveOptions.SectionName}:Enabled"))
+        {
+            services.TryAddSingleton<IGoogleDriveClient>(provider =>
+                new GoogleDriveClient(
+                    provider.GetRequiredService<IOptions<GoogleDriveOptions>>().Value));
+            services.TryAddScoped<IMediaStorage, GoogleDriveMediaStorage>();
+        }
+        else
+        {
+            services.TryAddScoped<IMediaStorage, UnavailableMediaStorage>();
+        }
         services.AddScoped<ICalendarNotifier, SignalRCalendarNotifier>();
         services.AddScoped<ILunarRecurrenceService, LunarRecurrenceService>();
 
