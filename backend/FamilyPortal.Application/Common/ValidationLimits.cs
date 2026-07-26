@@ -17,6 +17,7 @@ public static class ValidationLimits
     public const int MaxPhotos = 100;
     public const int MaxRecurrenceInterval = 120;
     public const long MaxMediaBytes = 10 * 1024 * 1024;
+    public const long MaxMediaRequestBytes = MaxMediaBytes + (64 * 1024);
     public const int MaxMediaWidth = 8192;
     public const int MaxMediaHeight = 8192;
     public const long MaxMediaPixels = 16_000_000;

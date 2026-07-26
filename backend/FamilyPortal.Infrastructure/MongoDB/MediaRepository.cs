@@ -49,6 +49,24 @@ public sealed class MediaRepository : IMediaRepository
     }
 
     /// <inheritdoc />
+    public async Task<MediaAsset?> UpdateVisibilityAsync(
+        string id,
+        MediaVisibility visibility,
+        CancellationToken cancellationToken = default)
+    {
+        return await _collection.FindOneAndUpdateAsync(
+            BuildActiveIdFilter(id),
+            Builders<MediaAsset>.Update
+                .Set(asset => asset.Visibility, visibility)
+                .Set(asset => asset.UpdatedAt, DateTime.UtcNow),
+            new FindOneAndUpdateOptions<MediaAsset>
+            {
+                ReturnDocument = ReturnDocument.After
+            },
+            cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task<bool> SoftDeleteAsync(
         string id,
         CancellationToken cancellationToken = default)

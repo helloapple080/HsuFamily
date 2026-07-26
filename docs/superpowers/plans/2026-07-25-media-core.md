@@ -197,3 +197,29 @@ git commit -m "feat: expose authorized media endpoints"
 - 完整直接 runner 在 discover/start 後長時間無輸出，已以 Ctrl-C 中止（exit 130）。以 `-longRunning 15 -diagnostics` 重跑定位為既有 `ApiSecurityIntegrationTests.ProductionHttpsResponse_IncludesHsts` 持續超過 59 秒；本批次不將完整 suite 記錄為通過，需由主流程處理此環境性卡住後補跑。
 - `dotnet list backend/FamilyPortal.Infrastructure/FamilyPortal.Infrastructure.csproj package --vulnerable --include-transitive`：NuGet 未回報任何已知易受攻擊的直接或間接套件。
 - 本批次未修改 frontend lockfile 或 workspace 設定。
+
+---
+
+## Task 3 實作報告（2026-07-26）
+
+### API、授權與輸入界線
+
+- 新增 `POST /api/media`、`GET /api/media/{id}/content`、`PATCH /api/media/{id}/visibility`、`DELETE /api/media/{id}`；三個 mutation 均套用 `AdminOnly` 並使用 `ApiResponse`，只有內容讀取明確允許匿名，再由 `IMediaService` 依 `Public`／`FamilyOnly` 決定存取。
+- 上傳者只取自 `ClaimTypes.NameIdentifier`。上傳端點同時限制檔案內容為 10 MB、multipart request 為 10 MB + 64 KB bounded overhead，並套用 `media-upload` named fixed-window limiter；分區鍵優先使用 `NameIdentifier`，匿名才退回來源 IP。
+- JSON enum converter 禁止整數 token；multipart 與 visibility body 另外只接受 enum 名稱並檢查已定義值，避免數字別名繞過字串 API 契約。
+- 內容成功回應加入 `X-Content-Type-Options: nosniff`；`Public` 使用短期 public cache，`FamilyOnly` 與所有錯誤使用 `private, no-store`。MVC executor 擁有成功 stream 並於寫出後釋放；fail-closed 分支主動釋放 stream。
+
+### 儲存供應商與持久化
+
+- 未加入 Google storage SDK 或實作。Infrastructure 以 `TryAddScoped` 條件註冊 `UnavailableMediaStorage`；未設定正式 provider 時應用仍可啟動，但所有儲存操作均以供應商中立訊息 fail closed，已存在的正式 provider 不會被 fallback 覆寫。
+- 新增可見性更新 repository/service 路徑；MongoDB 使用 active-record filter 原子更新 enum 與 `UpdatedAt = DateTime.UtcNow`，並回傳更新後安全 DTO。
+
+### 測試與限制
+
+- Controller contract tests 覆蓋 AdminOnly／AllowAnonymous metadata、upload rate policy、10 MB 邊界、NameIdentifier、字串 enum、防洩漏錯誤與 public/private headers。
+- 純 in-process `IAuthorizationService`／`IPolicyEvaluator` 測試驗證匿名 challenge、一般使用者 forbid、Admin success；`FileStreamResultExecutor` 測試驗證實際 response body 與 executor 完成後 stream dispose，未啟動 TestServer。
+- fail-closed adapter 測試涵蓋預設 DI 可解析、三種操作均拒絕，以及既有 provider 不被 fallback 覆寫。
+- `dotnet build backend/FamilyPortal.Security.Tests/FamilyPortal.Security.Tests.csproj --maxcpucount:1 --no-restore`：成功，0 warnings / 0 errors。
+- focused media/API/storage suite：95/95 passed。
+- 排除當前環境已知會卡住的 `ApiSecurityIntegrationTests` 後，其餘完整後端 suite：305/305 passed。曾建立的獨立 TestServer 測試在第一個 request 超過 29 秒後，於總計約 42 秒內中止；已改為上述 bounded in-process pipeline/executor 測試，未留下會卡住的新測試。
+- 本批次未修改 frontend lockfile 或 workspace 設定。

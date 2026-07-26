@@ -1013,6 +1013,42 @@ public sealed class MediaServiceTests
         Assert.Null(repository.RequestedId);
     }
 
+    /// <summary>有效的管理操作應更新可見性並回傳安全 DTO。</summary>
+    [Fact]
+    public async Task UpdateVisibilityAsync_ValidRequestUpdatesRepository()
+    {
+        var repository = new FakeMediaRepository { Stored = CreateAsset(MediaVisibility.FamilyOnly) };
+        var service = CreateService(repository, new FakeMediaStorage());
+
+        var result = await service.UpdateVisibilityAsync(
+            repository.Stored.Id,
+            MediaVisibility.Public,
+            ObjectId.GenerateNewId().ToString(),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(MediaVisibility.Public, repository.Stored.Visibility);
+        Assert.Equal(MediaVisibility.Public, result.Value!.Visibility);
+    }
+
+    /// <summary>未定義可見性不得進入 repository。</summary>
+    [Fact]
+    public async Task UpdateVisibilityAsync_UndefinedVisibilityReturnsValidation()
+    {
+        var repository = new FakeMediaRepository { Stored = CreateAsset(MediaVisibility.FamilyOnly) };
+        var service = CreateService(repository, new FakeMediaStorage());
+
+        var result = await service.UpdateVisibilityAsync(
+            repository.Stored.Id,
+            (MediaVisibility)int.MaxValue,
+            ObjectId.GenerateNewId().ToString(),
+            CancellationToken.None);
+
+        Assert.Equal(ServiceError.Validation, result.Error);
+        Assert.Null(repository.RequestedId);
+        Assert.Equal(MediaVisibility.FamilyOnly, repository.Stored.Visibility);
+    }
+
     /// <summary>刪除應先軟刪除，再刪除儲存物件並完成清理狀態。</summary>
     [Fact]
     public async Task DeleteAsync_SoftDeletesBeforeStorageAndMarksCleanupComplete()
@@ -1483,6 +1519,21 @@ public sealed class MediaServiceTests
 
             Created = asset;
             return Task.FromResult(MediaCreateResult.Created);
+        }
+
+        /// <inheritdoc />
+        public Task<MediaAsset?> UpdateVisibilityAsync(
+            string id,
+            MediaVisibility visibility,
+            CancellationToken cancellationToken = default)
+        {
+            if (Stored?.Id != id)
+            {
+                return Task.FromResult<MediaAsset?>(null);
+            }
+
+            Stored.Visibility = visibility;
+            return Task.FromResult<MediaAsset?>(Stored);
         }
 
         /// <inheritdoc />

@@ -1,5 +1,6 @@
 using FamilyPortal.Application.Common;
 using FamilyPortal.Application.DTOs.Media;
+using FamilyPortal.Domain.Enums;
 
 namespace FamilyPortal.Application.Interfaces;
 
@@ -16,6 +17,13 @@ public interface IMediaService
     Task<ServiceResult<MediaContentResponse>> OpenReadAsync(
         string mediaId,
         bool isAuthenticated,
+        CancellationToken cancellationToken);
+
+    /// <summary>更新媒體可見性；呼叫端必須先完成 AdminOnly 授權。</summary>
+    Task<ServiceResult<MediaResponse>> UpdateVisibilityAsync(
+        string mediaId,
+        MediaVisibility visibility,
+        string userId,
         CancellationToken cancellationToken);
 
     /// <summary>軟刪除媒體並嘗試清理儲存物件；呼叫端必須先完成 AdminOnly 授權。</summary>

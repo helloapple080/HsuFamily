@@ -6,6 +6,7 @@ using FamilyPortal.Infrastructure.MongoDB;
 using FamilyPortal.Infrastructure.Security;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace FamilyPortal.Infrastructure;
 
@@ -36,6 +37,7 @@ public static class DependencyInjection
         services.AddScoped<IItineraryRepository, ItineraryRepository>();
         services.AddScoped<IMediaRepository, MediaRepository>();
         services.AddSingleton<IImageInspector, SkiaImageInspector>();
+        services.TryAddScoped<IMediaStorage, UnavailableMediaStorage>();
         services.AddScoped<ICalendarNotifier, SignalRCalendarNotifier>();
         services.AddScoped<ILunarRecurrenceService, LunarRecurrenceService>();
 

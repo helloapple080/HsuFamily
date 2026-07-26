@@ -10,7 +10,18 @@ public sealed class ApiStartupSourceTests
     public void Program_EnforcesBodyLimitAndSecurityMiddlewareOrder()
     {
         var source = File.ReadAllText(ProgramSourcePath());
-        Assert.Contains("options.Limits.MaxRequestBodySize = 1024 * 1024", source);
+        Assert.Contains(
+            "options.Limits.MaxRequestBodySize = ValidationLimits.MaxMediaRequestBytes",
+            source);
+        Assert.Contains(
+            "options.MultipartBodyLengthLimit = ValidationLimits.MaxMediaRequestBytes",
+            source);
+        Assert.Contains(
+            "new JsonStringEnumConverter(allowIntegerValues: false)",
+            source);
+        Assert.Contains(
+            "options.AddPolicy(\"media-upload\"",
+            source);
 
         var markers = new[]
         {

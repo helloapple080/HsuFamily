@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 using FamilyPortal.Application.DTOs;
+using FamilyPortal.Application.Common;
 using FamilyPortal.Application.Interfaces;
 using FamilyPortal.Application.Services;
 using FamilyPortal.Api.Configuration;
@@ -16,6 +17,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.IdentityModel.Tokens;
 using System.Net;
@@ -23,7 +25,7 @@ using System.Net;
 var builder = WebApplication.CreateBuilder(args);
 ProductionSecurityOptions.Validate(builder.Configuration, builder.Environment.EnvironmentName);
 builder.WebHost.ConfigureKestrel(options =>
-    options.Limits.MaxRequestBodySize = 1024 * 1024);
+    options.Limits.MaxRequestBodySize = ValidationLimits.MaxMediaRequestBytes);
 
 var secureCookies = builder.Configuration.GetValue("SecuritySettings:CookieSecure", true);
 var dataProtectionKeysPath = builder.Configuration["DataProtection:KeysPath"];
@@ -54,6 +56,7 @@ builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<IMemberService, MemberService>();
 builder.Services.AddScoped<IItineraryService, ItineraryService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IMediaService, MediaService>();
 
 // ─────────────────────────────────────────────
 // 2. JWT 認證配置
@@ -142,10 +145,14 @@ builder.Services.AddControllersWithViews(options =>
     .AddJsonOptions(options =>
     {
         // Enum 序列化為字串（非數字）
-        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+        options.JsonSerializerOptions.Converters.Add(
+            new JsonStringEnumConverter(allowIntegerValues: false));
         // 忽略 null 值屬性
         options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
     });
+
+builder.Services.Configure<FormOptions>(options =>
+    options.MultipartBodyLengthLimit = ValidationLimits.MaxMediaRequestBytes);
 
 // 統一 DataAnnotations / ModelState 驗證錯誤格式
 builder.Services.Configure<ApiBehaviorOptions>(options =>
@@ -225,6 +232,16 @@ builder.Services.AddRateLimiter(options =>
             {
                 PermitLimit = 30,
                 Window = TimeSpan.FromMinutes(5),
+                QueueLimit = 0
+            }));
+
+    options.AddPolicy("media-upload", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: FamilyPortalRateLimitPartition.GetPartitionKey(context),
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0
             }));
 });

@@ -209,7 +209,11 @@ public sealed class MediaService : IMediaService
             }
 
             return ServiceResult<MediaContentResponse>.Success(
-                new MediaContentResponse(content, asset.ContentType, asset.SizeBytes));
+                new MediaContentResponse(
+                    content,
+                    asset.ContentType,
+                    asset.SizeBytes,
+                    asset.Visibility));
         }
         catch (OperationCanceledException)
         {
@@ -218,6 +222,38 @@ public sealed class MediaService : IMediaService
         catch (Exception)
         {
             return ConflictFailure<MediaContentResponse>("媒體內容目前無法讀取");
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<ServiceResult<MediaResponse>> UpdateVisibilityAsync(
+        string mediaId,
+        MediaVisibility visibility,
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        if (!IsValidObjectId(mediaId) || !IsValidObjectId(userId) || !Enum.IsDefined(visibility))
+        {
+            return ValidationFailure<MediaResponse>("無效的媒體、使用者或可見性");
+        }
+
+        try
+        {
+            var asset = await _repository.UpdateVisibilityAsync(
+                mediaId,
+                visibility,
+                cancellationToken);
+            return asset is null
+                ? ServiceResult<MediaResponse>.Failure(ServiceError.NotFound, "媒體不存在")
+                : ServiceResult<MediaResponse>.Success(MapToResponse(asset));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return ConflictFailure<MediaResponse>("無法更新媒體可見性");
         }
     }
 
