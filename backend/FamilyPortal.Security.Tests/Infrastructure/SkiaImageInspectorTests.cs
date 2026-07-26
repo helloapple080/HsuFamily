@@ -1,10 +1,16 @@
 using System.Buffers.Binary;
+using System.Reflection;
 using FamilyPortal.Infrastructure.Media;
 using Xunit;
 
 namespace FamilyPortal.Security.Tests.Infrastructure;
 
+/// <summary>確保 static decode gate 測試不與其他 inspector 測試並行。</summary>
+[CollectionDefinition("Skia image inspector serial", DisableParallelization = true)]
+public sealed class SkiaImageInspectorCollection;
+
 /// <summary>以真實 Skia codec 驗證完整影像解碼與格式識別。</summary>
+[Collection("Skia image inspector serial")]
 public sealed class SkiaImageInspectorTests
 {
     /// <summary>支援的真實影像必須完成像素解碼並回傳 canonical MIME。</summary>
@@ -50,6 +56,32 @@ public sealed class SkiaImageInspectorTests
         var result = await inspector.InspectAsync(content, CancellationToken.None);
 
         Assert.Null(result);
+    }
+
+    /// <summary>兩個 decode slot 佔用時，第三個解碼必須能在等待 gate 時取消。</summary>
+    [Fact]
+    public async Task InspectAsync_CancellationWhileWaitingForDecodeGateRethrows()
+    {
+        var gate = Assert.IsType<SemaphoreSlim>(
+            typeof(SkiaImageInspector)
+                .GetField("DecodeGate", BindingFlags.NonPublic | BindingFlags.Static)?
+                .GetValue(null));
+        await gate.WaitAsync(TestContext.Current.CancellationToken);
+        await gate.WaitAsync(TestContext.Current.CancellationToken);
+        try
+        {
+            using var source = new CancellationTokenSource();
+            await using var content = new MemoryStream(CreatePng());
+            var inspection = new SkiaImageInspector().InspectAsync(content, source.Token);
+
+            source.Cancel();
+
+            await Assert.ThrowsAsync<OperationCanceledException>(() => inspection);
+        }
+        finally
+        {
+            gate.Release(2);
+        }
     }
 
     private static byte[] CreateImage(string contentType) => contentType switch

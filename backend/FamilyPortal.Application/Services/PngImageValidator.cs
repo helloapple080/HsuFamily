@@ -19,6 +19,7 @@ internal static class PngImageValidator
         var imageDataEnded = false;
         var sawPalette = false;
         var colorType = 0;
+        var bitDepth = 0;
         var width = 0;
         var height = 0;
 
@@ -54,6 +55,7 @@ internal static class PngImageValidator
                 }
 
                 sawHeader = true;
+                bitDepth = data[8];
                 colorType = data[9];
             }
             else if (type.SequenceEqual("IHDR"u8))
@@ -62,7 +64,10 @@ internal static class PngImageValidator
             }
             else if (type.SequenceEqual("PLTE"u8))
             {
-                if (sawPalette || sawImageData || length is 0 or > 768 || length % 3 != 0)
+                var paletteEntries = length / 3;
+                if (sawPalette || sawImageData || length is 0 or > 768 || length % 3 != 0 ||
+                    colorType is 0 or 4 ||
+                    colorType == 3 && paletteEntries > 1u << bitDepth)
                 {
                     return false;
                 }

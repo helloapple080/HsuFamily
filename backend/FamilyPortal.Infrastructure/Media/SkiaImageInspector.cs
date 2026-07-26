@@ -8,17 +8,20 @@ namespace FamilyPortal.Infrastructure.Media;
 /// <summary>使用 Skia codec 完整解碼 JPEG、PNG 與 WebP。</summary>
 public sealed class SkiaImageInspector : IImageInspector
 {
+    private static readonly SemaphoreSlim DecodeGate = new(initialCount: 2, maxCount: 2);
+
     /// <inheritdoc />
-    public Task<ImageInspectionResult?> InspectAsync(
+    public async Task<ImageInspectionResult?> InspectAsync(
         Stream content,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (content is null || !content.CanRead)
         {
-            return Task.FromResult<ImageInspectionResult?>(null);
+            return null;
         }
 
+        await DecodeGate.WaitAsync(cancellationToken);
         try
         {
             if (content.CanSeek)
@@ -30,13 +33,13 @@ public sealed class SkiaImageInspector : IImageInspector
             using var codec = SKCodec.Create(managedStream);
             if (codec is null || !TryMapContentType(codec.EncodedFormat, out var contentType))
             {
-                return Task.FromResult<ImageInspectionResult?>(null);
+                return null;
             }
 
             var info = codec.Info;
             if (!DimensionsAreAllowed(info.Width, info.Height))
             {
-                return Task.FromResult<ImageInspectionResult?>(null);
+                return null;
             }
 
             var decodeInfo = new SKImageInfo(
@@ -50,10 +53,10 @@ public sealed class SkiaImageInspector : IImageInspector
                 bitmap.GetPixels(),
                 bitmap.RowBytes,
                 new SKCodecOptions());
-            return Task.FromResult<ImageInspectionResult?>(
-                decodeResult == SKCodecResult.Success
-                    ? new ImageInspectionResult(contentType, info.Width, info.Height)
-                    : null);
+            cancellationToken.ThrowIfCancellationRequested();
+            return decodeResult == SKCodecResult.Success
+                ? new ImageInspectionResult(contentType, info.Width, info.Height)
+                : null;
         }
         catch (OperationCanceledException)
         {
@@ -61,7 +64,11 @@ public sealed class SkiaImageInspector : IImageInspector
         }
         catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
-            return Task.FromResult<ImageInspectionResult?>(null);
+            return null;
+        }
+        finally
+        {
+            DecodeGate.Release();
         }
     }
 

@@ -5,6 +5,13 @@ namespace FamilyPortal.Application.Services;
 /// <summary>驗證 WebP RIFF chunk 邊界、padding 與實際 VP8/VP8L 影像 payload。</summary>
 internal static class WebPImageValidator
 {
+    private const byte IccProfileFlag = 0x20;
+    private const byte AlphaFlag = 0x10;
+    private const byte ExifFlag = 0x08;
+    private const byte XmpFlag = 0x04;
+    private const byte AnimationFlag = 0x02;
+    private const byte ReservedFlagMask = 0xC1;
+
     internal static bool HasSignature(ReadOnlySpan<byte> content) =>
         content.Length >= 12 && content[..4].SequenceEqual("RIFF"u8) &&
         content.Slice(8, 4).SequenceEqual("WEBP"u8);
@@ -21,6 +28,14 @@ internal static class WebPImageValidator
         var offset = 12;
         (int Width, int Height)? canvas = null;
         (int Width, int Height)? payload = null;
+        byte extendedFlags = 0;
+        var payloadIsLossless = false;
+        var sawIccProfile = false;
+        var sawAlpha = false;
+        var sawExif = false;
+        var sawXmp = false;
+        var sawAnimationHeader = false;
+        var sawAnimationFrame = false;
         while (offset <= content.Length - 8)
         {
             var type = content.Slice(offset, 4);
@@ -47,16 +62,56 @@ internal static class WebPImageValidator
             if (type.SequenceEqual("VP8X"u8))
             {
                 if (offset != 12 || canvas is not null || payload is not null ||
-                    !TryReadVp8X(data, out var width, out var height))
+                    !TryReadVp8X(data, out var width, out var height, out extendedFlags))
                 {
                     return false;
                 }
 
                 canvas = (width, height);
             }
+            else if (type.SequenceEqual("ICCP"u8))
+            {
+                if (canvas is null || sawIccProfile || sawAlpha || payload is not null ||
+                    sawAnimationHeader || sawAnimationFrame || length == 0)
+                {
+                    return false;
+                }
+
+                sawIccProfile = true;
+            }
+            else if (type.SequenceEqual("ALPH"u8))
+            {
+                if (canvas is null || sawAlpha || payload is not null ||
+                    sawAnimationHeader || sawAnimationFrame || length <= 1)
+                {
+                    return false;
+                }
+
+                sawAlpha = true;
+            }
+            else if (type.SequenceEqual("ANIM"u8))
+            {
+                if (canvas is null || sawAnimationHeader || sawAnimationFrame ||
+                    payload is not null || sawAlpha || length != 6)
+                {
+                    return false;
+                }
+
+                sawAnimationHeader = true;
+            }
+            else if (type.SequenceEqual("ANMF"u8))
+            {
+                if (canvas is null || !sawAnimationHeader || payload is not null || length < 16)
+                {
+                    return false;
+                }
+
+                sawAnimationFrame = true;
+            }
             else if (type.SequenceEqual("VP8 "u8))
             {
-                if (payload is not null || !TryReadVp8(data, out var width, out var height))
+                if (sawAnimationHeader || sawAnimationFrame || payload is not null ||
+                    !TryReadVp8(data, out var width, out var height))
                 {
                     return false;
                 }
@@ -65,19 +120,76 @@ internal static class WebPImageValidator
             }
             else if (type.SequenceEqual("VP8L"u8))
             {
-                if (payload is not null || !TryReadVp8L(data, out var width, out var height))
+                if (sawAnimationHeader || sawAnimationFrame || sawAlpha || payload is not null ||
+                    !TryReadVp8L(data, out var width, out var height))
                 {
                     return false;
                 }
 
                 payload = (width, height);
+                payloadIsLossless = true;
+            }
+            else if (type.SequenceEqual("EXIF"u8))
+            {
+                if (canvas is null || sawExif || length == 0)
+                {
+                    return false;
+                }
+
+                sawExif = true;
+            }
+            else if (type.SequenceEqual("XMP "u8))
+            {
+                if (canvas is null || sawXmp || length == 0)
+                {
+                    return false;
+                }
+
+                sawXmp = true;
             }
 
             offset = (int)end;
         }
 
-        if (offset != content.Length || payload is null ||
-            canvas is not null && canvas.Value != payload.Value)
+        if (offset != content.Length)
+        {
+            return false;
+        }
+
+        if (canvas is null)
+        {
+            if (payload is null)
+            {
+                return false;
+            }
+
+            image = new ImageInfo("image/webp", payload.Value.Width, payload.Value.Height);
+            return true;
+        }
+
+        var isAnimated = HasFlag(extendedFlags, AnimationFlag);
+        if (HasFlag(extendedFlags, IccProfileFlag) != sawIccProfile ||
+            HasFlag(extendedFlags, ExifFlag) != sawExif ||
+            HasFlag(extendedFlags, XmpFlag) != sawXmp ||
+            isAnimated != (sawAnimationHeader && sawAnimationFrame) ||
+            sawAnimationHeader != sawAnimationFrame ||
+            HasFlag(extendedFlags, AlphaFlag) != (sawAlpha || payloadIsLossless && HasFlag(extendedFlags, AlphaFlag)))
+        {
+            return false;
+        }
+
+        if (isAnimated)
+        {
+            if (payload is not null)
+            {
+                return false;
+            }
+
+            image = new ImageInfo("image/webp", canvas.Value.Width, canvas.Value.Height);
+            return true;
+        }
+
+        if (payload is null || canvas.Value != payload.Value || sawAnimationHeader || sawAnimationFrame)
         {
             return false;
         }
@@ -86,15 +198,22 @@ internal static class WebPImageValidator
         return true;
     }
 
-    private static bool TryReadVp8X(ReadOnlySpan<byte> data, out int width, out int height)
+    private static bool TryReadVp8X(
+        ReadOnlySpan<byte> data,
+        out int width,
+        out int height,
+        out byte flags)
     {
         width = 0;
         height = 0;
-        if (data.Length != 10 || data[1] != 0 || data[2] != 0 || data[3] != 0)
+        flags = 0;
+        if (data.Length != 10 || (data[0] & ReservedFlagMask) != 0 ||
+            data[1] != 0 || data[2] != 0 || data[3] != 0)
         {
             return false;
         }
 
+        flags = data[0];
         width = ReadUInt24(data.Slice(4, 3)) + 1;
         height = ReadUInt24(data.Slice(7, 3)) + 1;
         return width > 0 && height > 0;
@@ -139,4 +258,6 @@ internal static class WebPImageValidator
 
     private static int ReadUInt24(ReadOnlySpan<byte> data) =>
         data[0] | (data[1] << 8) | (data[2] << 16);
+
+    private static bool HasFlag(byte flags, byte flag) => (flags & flag) != 0;
 }

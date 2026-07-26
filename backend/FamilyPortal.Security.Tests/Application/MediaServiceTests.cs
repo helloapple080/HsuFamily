@@ -181,6 +181,72 @@ public sealed class MediaServiceTests
         Assert.Null(storage.StoredUpload);
     }
 
+    /// <summary>Grayscale 與 grayscale-alpha PNG 不得含有 PLTE。</summary>
+    [Theory]
+    [InlineData(0, 1)]
+    [InlineData(4, 8)]
+    public async Task UploadAsync_PngForbiddenPaletteForColorTypeReturnsValidation(
+        byte colorType,
+        byte bitDepth)
+    {
+        var bytes = SetPngHeader(CreateBoundaryPng(1, 1), bitDepth, colorType);
+        bytes = InsertPngChunkBefore(bytes, "IDAT"u8, "PLTE"u8, [0, 0, 0]);
+        var storage = new FakeMediaStorage();
+        var inspector = new HeaderMatchingImageInspector();
+        var service = CreateService(new FakeMediaRepository(), storage, inspector);
+
+        var result = await service.UploadAsync(
+            CreateRequest(bytes, "image/png"),
+            ObjectId.GenerateNewId().ToString(),
+            CancellationToken.None);
+
+        Assert.Equal(ServiceError.Validation, result.Error);
+        Assert.Equal(0, inspector.InvocationCount);
+        Assert.Null(storage.StoredUpload);
+    }
+
+    /// <summary>Indexed PNG 的 PLTE 數量不得超過 bit depth 可表示的項目數。</summary>
+    [Fact]
+    public async Task UploadAsync_PngIndexedPaletteOverBitDepthReturnsValidation()
+    {
+        var bytes = SetPngHeader(CreateBoundaryPng(1, 1), bitDepth: 1, colorType: 3);
+        bytes = InsertPngChunkBefore(
+            bytes,
+            "IDAT"u8,
+            "PLTE"u8,
+            [0, 0, 0, 127, 127, 127, 255, 255, 255]);
+        var storage = new FakeMediaStorage();
+        var inspector = new HeaderMatchingImageInspector();
+        var service = CreateService(new FakeMediaRepository(), storage, inspector);
+
+        var result = await service.UploadAsync(
+            CreateRequest(bytes, "image/png"),
+            ObjectId.GenerateNewId().ToString(),
+            CancellationToken.None);
+
+        Assert.Equal(ServiceError.Validation, result.Error);
+        Assert.Equal(0, inspector.InvocationCount);
+        Assert.Null(storage.StoredUpload);
+    }
+
+    /// <summary>Indexed PNG 在 IDAT 前必須有 PLTE。</summary>
+    [Fact]
+    public async Task UploadAsync_PngIndexedWithoutPaletteReturnsValidation()
+    {
+        var bytes = SetPngHeader(CreateBoundaryPng(1, 1), bitDepth: 1, colorType: 3);
+        var storage = new FakeMediaStorage();
+        var inspector = new HeaderMatchingImageInspector();
+        var service = CreateService(new FakeMediaRepository(), storage, inspector);
+
+        var result = await service.UploadAsync(
+            CreateRequest(bytes, "image/png"),
+            ObjectId.GenerateNewId().ToString(),
+            CancellationToken.None);
+
+        Assert.Equal(ServiceError.Validation, result.Error);
+        Assert.Equal(0, inspector.InvocationCount);
+    }
+
     /// <summary>PNG 結構合法但 IDAT zlib 資料損毀時，完整解碼器必須拒絕。</summary>
     [Fact]
     public async Task UploadAsync_CorruptPngImageDataRejectedByFullDecoder()
@@ -244,11 +310,14 @@ public sealed class MediaServiceTests
         Assert.Null(storage.StoredUpload);
     }
 
-    /// <summary>VP8X 的保留位元非零時必須拒絕。</summary>
-    [Fact]
-    public async Task UploadAsync_WebPReservedBitsReturnsValidation()
+    /// <summary>VP8X flag byte 任一 reserved bit 非零時必須拒絕。</summary>
+    [Theory]
+    [InlineData(0x80)]
+    [InlineData(0x40)]
+    [InlineData(0x01)]
+    public async Task UploadAsync_WebPReservedFlagBitsReturnsValidation(byte flagByte)
     {
-        var bytes = CreateExtendedWebP(includeLeadingJunk: false, reservedByte: 1);
+        var bytes = CreateExtendedWebP(flagByte, includeLeadingJunk: false);
         var storage = new FakeMediaStorage();
         var service = CreateService(new FakeMediaRepository(), storage);
 
@@ -261,11 +330,143 @@ public sealed class MediaServiceTests
         Assert.Null(storage.StoredUpload);
     }
 
+    /// <summary>VP8X 功能旗標若缺少對應 chunk 必須拒絕。</summary>
+    [Theory]
+    [InlineData(0x20)]
+    [InlineData(0x10)]
+    [InlineData(0x08)]
+    [InlineData(0x04)]
+    [InlineData(0x02)]
+    public async Task UploadAsync_WebPFeatureFlagWithoutChunkReturnsValidation(byte flagByte)
+    {
+        var bytes = CreateExtendedWebP(flagByte, includeLeadingJunk: false);
+        var storage = new FakeMediaStorage();
+        var inspector = new HeaderMatchingImageInspector();
+        var service = CreateService(new FakeMediaRepository(), storage, inspector);
+
+        var result = await service.UploadAsync(
+            CreateRequest(bytes, "image/webp"),
+            ObjectId.GenerateNewId().ToString(),
+            CancellationToken.None);
+
+        Assert.Equal(ServiceError.Validation, result.Error);
+        Assert.Equal(0, inspector.InvocationCount);
+        Assert.Null(storage.StoredUpload);
+    }
+
+    /// <summary>WebP feature chunk 出現時必須同時設定對應 VP8X 旗標。</summary>
+    [Theory]
+    [InlineData("ICCP", false)]
+    [InlineData("ALPH", false)]
+    [InlineData("EXIF", true)]
+    [InlineData("XMP ", true)]
+    [InlineData("ANIM", false)]
+    public async Task UploadAsync_WebPFeatureChunkWithoutFlagReturnsValidation(
+        string chunkType,
+        bool afterPayload)
+    {
+        var chunkData = chunkType switch
+        {
+            "ALPH" => new byte[2],
+            "ANIM" => new byte[6],
+            _ => new byte[1]
+        };
+        var bytes = CreateExtendedWebP(
+            flagByte: 0,
+            includeLeadingJunk: false,
+            chunksBeforePayload: afterPayload ? null : [(chunkType, chunkData)],
+            chunksAfterPayload: afterPayload ? [(chunkType, chunkData)] : null);
+        var storage = new FakeMediaStorage();
+        var inspector = new HeaderMatchingImageInspector();
+        var service = CreateService(new FakeMediaRepository(), storage, inspector);
+
+        var result = await service.UploadAsync(
+            CreateRequest(bytes, "image/webp"),
+            ObjectId.GenerateNewId().ToString(),
+            CancellationToken.None);
+
+        Assert.Equal(ServiceError.Validation, result.Error);
+        Assert.Equal(0, inspector.InvocationCount);
+    }
+
+    /// <summary>VP8X 功能旗標與合法位置的對應 chunk 應通過結構驗證。</summary>
+    [Theory]
+    [InlineData(0x20, "ICCP", false)]
+    [InlineData(0x10, "ALPH", false)]
+    [InlineData(0x08, "EXIF", true)]
+    [InlineData(0x04, "XMP ", true)]
+    public async Task UploadAsync_WebPMatchingFeatureFlagAndChunkAreAccepted(
+        byte flagByte,
+        string chunkType,
+        bool afterPayload)
+    {
+        var chunkData = chunkType == "ALPH" ? new byte[2] : new byte[1];
+        var bytes = CreateExtendedWebP(
+            flagByte,
+            includeLeadingJunk: false,
+            chunksBeforePayload: afterPayload ? null : [(chunkType, chunkData)],
+            chunksAfterPayload: afterPayload ? [(chunkType, chunkData)] : null);
+        var storage = new FakeMediaStorage();
+        var service = CreateService(new FakeMediaRepository(), storage);
+
+        var result = await service.UploadAsync(
+            CreateRequest(bytes, "image/webp"),
+            ObjectId.GenerateNewId().ToString(),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+    }
+
+    /// <summary>Animation 旗標只有在 ANIM 後接 ANMF 且沒有 still-image payload 時有效。</summary>
+    [Fact]
+    public async Task UploadAsync_WebPMatchingAnimationChunksAreAccepted()
+    {
+        var bytes = CreateExtendedWebP(
+            flagByte: 0x02,
+            includeLeadingJunk: false,
+            chunksBeforePayload: [("ANIM", new byte[6]), ("ANMF", new byte[16])],
+            includePayload: false);
+        var storage = new FakeMediaStorage();
+        var service = CreateService(new FakeMediaRepository(), storage);
+
+        var result = await service.UploadAsync(
+            CreateRequest(bytes, "image/webp"),
+            ObjectId.GenerateNewId().ToString(),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+    }
+
+    /// <summary>ICCP 與 ALPH 等重建必要 chunk 出現在影像資料後必須拒絕。</summary>
+    [Theory]
+    [InlineData(0x20, "ICCP")]
+    [InlineData(0x10, "ALPH")]
+    public async Task UploadAsync_WebPReconstructionChunkAfterPayloadReturnsValidation(
+        byte flagByte,
+        string chunkType)
+    {
+        var bytes = CreateExtendedWebP(
+            flagByte,
+            includeLeadingJunk: false,
+            chunksAfterPayload: [(chunkType, new byte[] { 0 })]);
+        var storage = new FakeMediaStorage();
+        var inspector = new HeaderMatchingImageInspector();
+        var service = CreateService(new FakeMediaRepository(), storage, inspector);
+
+        var result = await service.UploadAsync(
+            CreateRequest(bytes, "image/webp"),
+            ObjectId.GenerateNewId().ToString(),
+            CancellationToken.None);
+
+        Assert.Equal(ServiceError.Validation, result.Error);
+        Assert.Equal(0, inspector.InvocationCount);
+    }
+
     /// <summary>VP8X extended header 不是第一個 chunk 時必須拒絕。</summary>
     [Fact]
     public async Task UploadAsync_WebPExtendedHeaderAfterOtherChunkReturnsValidation()
     {
-        var bytes = CreateExtendedWebP(includeLeadingJunk: true, reservedByte: 0);
+        var bytes = CreateExtendedWebP(flagByte: 0, includeLeadingJunk: true);
         var storage = new FakeMediaStorage();
         var service = CreateService(new FakeMediaRepository(), storage);
 
@@ -323,7 +524,7 @@ public sealed class MediaServiceTests
     [Theory]
     [InlineData(8193, 1)]
     [InlineData(1, 8193)]
-    [InlineData(8000, 5001)]
+    [InlineData(4000, 4001)]
     [InlineData(int.MaxValue, int.MaxValue)]
     public async Task UploadAsync_DimensionsOverLimitsReturnsValidation(int width, int height)
     {
@@ -344,10 +545,10 @@ public sealed class MediaServiceTests
     [Fact]
     public async Task UploadAsync_DimensionsAtPixelLimitAreAccepted()
     {
-        var bytes = CreateBoundaryPng(8000, 5000);
+        var bytes = CreateBoundaryPng(4000, 4000);
         var storage = new FakeMediaStorage
         {
-            StoreResult = new StoredMediaObject("storage-1", "image/png", bytes.Length, 8000, 5000)
+            StoreResult = new StoredMediaObject("storage-1", "image/png", bytes.Length, 4000, 4000)
         };
         var service = CreateService(new FakeMediaRepository(), storage);
 
@@ -897,7 +1098,12 @@ public sealed class MediaServiceTests
     private static byte[] CreateWebP(int width, int height) => Convert.FromBase64String(
         "UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA");
 
-    private static byte[] CreateExtendedWebP(bool includeLeadingJunk, byte reservedByte)
+    private static byte[] CreateExtendedWebP(
+        byte flagByte,
+        bool includeLeadingJunk,
+        (string Type, byte[] Data)[]? chunksBeforePayload = null,
+        (string Type, byte[] Data)[]? chunksAfterPayload = null,
+        bool includePayload = true)
     {
         var payload = CreateWebP(1, 1).AsSpan(12).ToArray();
         using var webP = new MemoryStream();
@@ -910,9 +1116,22 @@ public sealed class MediaServiceTests
         }
 
         var extendedHeader = new byte[10];
-        extendedHeader[1] = reservedByte;
+        extendedHeader[0] = flagByte;
         WriteWebPChunk(webP, "VP8X"u8, extendedHeader);
-        webP.Write(payload);
+        foreach (var chunk in chunksBeforePayload ?? [])
+        {
+            WriteWebPChunk(webP, System.Text.Encoding.ASCII.GetBytes(chunk.Type), chunk.Data);
+        }
+
+        if (includePayload)
+        {
+            webP.Write(payload);
+        }
+        foreach (var chunk in chunksAfterPayload ?? [])
+        {
+            WriteWebPChunk(webP, System.Text.Encoding.ASCII.GetBytes(chunk.Type), chunk.Data);
+        }
+
         var bytes = webP.ToArray();
         BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(4, 4), (uint)(bytes.Length - 8));
         return bytes;
@@ -982,6 +1201,40 @@ public sealed class MediaServiceTests
         BinaryPrimitives.WriteInt32BigEndian(bytes.AsSpan(20, 4), height);
         BinaryPrimitives.WriteUInt32BigEndian(bytes.AsSpan(29, 4), ComputeCrc32(bytes.AsSpan(12, 17)));
         return bytes;
+    }
+
+    private static byte[] SetPngHeader(byte[] bytes, byte bitDepth, byte colorType)
+    {
+        bytes[24] = bitDepth;
+        bytes[25] = colorType;
+        BinaryPrimitives.WriteUInt32BigEndian(bytes.AsSpan(29, 4), ComputeCrc32(bytes.AsSpan(12, 17)));
+        return bytes;
+    }
+
+    private static byte[] InsertPngChunkBefore(
+        byte[] bytes,
+        ReadOnlySpan<byte> beforeType,
+        ReadOnlySpan<byte> chunkType,
+        byte[] chunkData)
+    {
+        var offset = 8;
+        while (offset <= bytes.Length - 12)
+        {
+            var length = BinaryPrimitives.ReadInt32BigEndian(bytes.AsSpan(offset, 4));
+            if (bytes.AsSpan(offset + 4, 4).SequenceEqual(beforeType))
+            {
+                var chunk = CreatePngChunk(chunkType, chunkData);
+                var result = new byte[bytes.Length + chunk.Length];
+                bytes.AsSpan(0, offset).CopyTo(result);
+                chunk.CopyTo(result, offset);
+                bytes.AsSpan(offset).CopyTo(result.AsSpan(offset + chunk.Length));
+                return result;
+            }
+
+            offset += length + 12;
+        }
+
+        throw new InvalidOperationException("測試 PNG 缺少指定 chunk");
     }
 
     private static byte[] CorruptPngImageData(byte[] bytes)

@@ -19,6 +19,6 @@ public static class ValidationLimits
     public const long MaxMediaBytes = 10 * 1024 * 1024;
     public const int MaxMediaWidth = 8192;
     public const int MaxMediaHeight = 8192;
-    public const long MaxMediaPixels = 40_000_000;
+    public const long MaxMediaPixels = 16_000_000;
     public const int MaxMediaGalleryItems = 30;
 }
