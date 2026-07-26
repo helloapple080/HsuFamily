@@ -207,7 +207,7 @@ git commit -m "feat: expose authorized media endpoints"
 - 新增 `POST /api/media`、`GET /api/media/{id}/content`、`PATCH /api/media/{id}/visibility`、`DELETE /api/media/{id}`；三個 mutation 均套用 `AdminOnly` 並使用 `ApiResponse`，只有內容讀取明確允許匿名，再由 `IMediaService` 依 `Public`／`FamilyOnly` 決定存取。
 - 上傳者只取自 `ClaimTypes.NameIdentifier`。上傳端點同時限制檔案內容為 10 MB、multipart request 為 10 MB + 64 KB bounded overhead，並套用 `media-upload` named fixed-window limiter；分區鍵優先使用 `NameIdentifier`，匿名才退回來源 IP。
 - JSON enum converter 禁止整數 token；multipart 與 visibility body 另外只接受 enum 名稱並檢查已定義值，避免數字別名繞過字串 API 契約。
-- 內容成功回應加入 `X-Content-Type-Options: nosniff`；`Public` 使用短期 public cache，`FamilyOnly` 與所有錯誤使用 `private, no-store`。MVC executor 擁有成功 stream 並於寫出後釋放；fail-closed 分支主動釋放 stream。
+- 內容成功回應加入 `X-Content-Type-Options: nosniff`；`Public` 使用 `public, max-age=0, must-revalidate`，`FamilyOnly` 與所有錯誤使用 `private, no-store`。MVC executor 擁有成功 stream 並於寫出後釋放；fail-closed 分支主動釋放 stream。
 
 ### 儲存供應商與持久化
 
@@ -223,3 +223,28 @@ git commit -m "feat: expose authorized media endpoints"
 - focused media/API/storage suite：95/95 passed。
 - 排除當前環境已知會卡住的 `ApiSecurityIntegrationTests` 後，其餘完整後端 suite：305/305 passed。曾建立的獨立 TestServer 測試在第一個 request 超過 29 秒後，於總計約 42 秒內中止；已改為上述 bounded in-process pipeline/executor 測試，未留下會卡住的新測試。
 - 本批次未修改 frontend lockfile 或 workspace 設定。
+
+---
+
+## Task 3 review hardening 報告（2026-07-26）
+
+### 身分與 CSRF cache
+
+- Frontend 新增 `invalidateCsrfToken()` generation boundary；login/logout 成功、logout 錯誤、refresh 成功與 refresh 失敗清除 claims-bound token 與 deduplicated request。舊的 in-flight CSRF request 只能完成原等待者，不得覆寫新世代 cache。
+- Refresh 成功後先 invalidate，再讓 Axios replay 原 mutation，因此 request interceptor 會取得目前身分的新 token；跨分頁 `/api/auth/me` 確認 session 已由其他分頁更新時也會 invalidate。
+- Direct Vitest 覆蓋 anonymous token → login → fresh token、refresh → replay fresh token、logout success/error，以及 stale in-flight request race。
+
+### Request limits、rate limiting 與撤銷安全
+
+- Kestrel 與全域 `FormOptions.MultipartBodyLengthLimit` 均恢復為 1 MiB；只有 media upload action 透過 `RequestSizeLimit` 與 `RequestFormLimits` 擴張到 10 MiB + 64 KiB overhead。
+- 100/min user-ID/IP limiter 改為 `RateLimiterOptions.GlobalLimiter`，讓 endpoint 的 `media-upload` 10/min policy 疊加而不被 controller convention 覆寫。Global limiter 只涵蓋 `/api` 與 `/hubs`；health 等非 API 路徑使用 no-limiter，維持 liveness 可用性。
+- Login 與 refresh 保留各自 named limiter。Public media 改為 `public, max-age=0, must-revalidate`，在尚無 purge 或 versioned URL 前避免撤銷後仍被五分鐘 fresh cache 直接使用。
+- API 安全註冊抽至可重用 extension；純 DI/options tests 驗證 fallback/Admin policy、全域 MVC antiforgery filter、1 MiB multipart default、真實 antiforgery identity binding、100/min user partition 與 health unlimited。Action reflection 加 production source contract 驗證 named policies、media body metadata，且 `MapControllers` 不再附加 fixed policy；未建立 WebApplication 或 TestServer。
+
+### Fresh verification
+
+- `dotnet build backend/FamilyPortal.Security.Tests/FamilyPortal.Security.Tests.csproj --maxcpucount:1 --no-restore`：成功，0 warnings / 0 errors。
+- Backend focused security/media suite：20/20 passed。
+- 排除當前環境已知會卡住的 `ApiSecurityIntegrationTests` 後，其餘 backend suite：311/311 passed。
+- Frontend focused CSRF suite：5/5 passed；完整 Vitest：76/76 passed（19 files）；focused 與完整 ESLint 均 exit 0。
+- 未修改 frontend lockfile 或 workspace 設定。

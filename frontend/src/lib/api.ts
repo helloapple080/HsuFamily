@@ -23,25 +23,41 @@ const sessionClient = axios.create({
 
 let csrfToken: string | null = null
 let csrfRequest: Promise<string> | null = null
+let csrfGeneration = 0
 let refreshRequest: Promise<void> | null = null
+
+/// 身分 Cookie 改變時清除 claims-bound CSRF token，並隔離舊的 in-flight request。
+export function invalidateCsrfToken(): void {
+  csrfGeneration++
+  csrfToken = null
+  csrfRequest = null
+}
 
 async function getCsrfToken(): Promise<string> {
   if (csrfToken) return csrfToken
 
-  csrfRequest ??= sessionClient
+  if (csrfRequest) return csrfRequest
+
+  const generation = csrfGeneration
+  const request = sessionClient
     .get<ApiResponse<CsrfTokenResponse>>('/api/auth/csrf')
     .then(({ data }) => {
       if (!data.success || !data.data?.token) {
         throw new Error('無法取得 CSRF Token')
       }
-      csrfToken = data.data.token
-      return csrfToken
+      if (generation === csrfGeneration) {
+        csrfToken = data.data.token
+      }
+      return data.data.token
     })
     .finally(() => {
-      csrfRequest = null
+      if (csrfRequest === request) {
+        csrfRequest = null
+      }
     })
 
-  return csrfRequest
+  csrfRequest = request
+  return request
 }
 
 async function refreshSession(): Promise<void> {
@@ -49,6 +65,7 @@ async function refreshSession(): Promise<void> {
   await sessionClient.post('/api/auth/refresh', undefined, {
     headers: { 'X-XSRF-TOKEN': token },
   })
+  invalidateCsrfToken()
 }
 
 async function refreshSessionAcrossTabs(): Promise<void> {
@@ -61,6 +78,7 @@ async function refreshSessionAcrossTabs(): Promise<void> {
     // 其他分頁可能已在等待期間完成輪替；先用共享 Cookie 驗證，避免重放舊 Refresh Token。
     try {
       await sessionClient.get('/api/auth/me')
+      invalidateCsrfToken()
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 401) {
         await refreshSession()
@@ -87,11 +105,22 @@ api.interceptors.request.use(async (config) => {
 })
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (response.config.url?.startsWith('/api/auth/login') ||
+        response.config.url?.startsWith('/api/auth/logout')) {
+      invalidateCsrfToken()
+    }
+    return response
+  },
   async (error: AxiosError) => {
     const originalRequest = error.config as RetryableRequestConfig | undefined
     const isAuthRequest = originalRequest?.url?.startsWith('/api/auth/login') ||
-      originalRequest?.url?.startsWith('/api/auth/refresh')
+      originalRequest?.url?.startsWith('/api/auth/refresh') ||
+      originalRequest?.url?.startsWith('/api/auth/logout')
+
+    if (originalRequest?.url?.startsWith('/api/auth/logout')) {
+      invalidateCsrfToken()
+    }
 
     if (error.response?.status === 401 && originalRequest && !originalRequest._retry && !isAuthRequest) {
       originalRequest._retry = true
@@ -103,6 +132,7 @@ api.interceptors.response.use(
         await refreshRequest
         return api(originalRequest)
       } catch {
+        invalidateCsrfToken()
         useAuthStore.getState().logout()
         if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
           window.location.assign('/login')

@@ -91,7 +91,7 @@ public sealed class MediaController(IMediaService mediaService) : ControllerBase
 
         Response.ContentLength = content.Length;
         Response.Headers.CacheControl = content.Visibility == MediaVisibility.Public
-            ? "public, max-age=300"
+            ? "public, max-age=0, must-revalidate"
             : "private, no-store";
         return File(content.Content, content.ContentType, enableRangeProcessing: false);
     }

@@ -1,8 +1,5 @@
 using System.Text;
-using System.Text.Json.Serialization;
 using System.Security.Claims;
-using System.Threading.RateLimiting;
-using FamilyPortal.Application.DTOs;
 using FamilyPortal.Application.Common;
 using FamilyPortal.Application.Interfaces;
 using FamilyPortal.Application.Services;
@@ -14,10 +11,8 @@ using FamilyPortal.Infrastructure.MongoDB;
 using FamilyPortal.Infrastructure.Security;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.IdentityModel.Tokens;
 using System.Net;
@@ -25,7 +20,7 @@ using System.Net;
 var builder = WebApplication.CreateBuilder(args);
 ProductionSecurityOptions.Validate(builder.Configuration, builder.Environment.EnvironmentName);
 builder.WebHost.ConfigureKestrel(options =>
-    options.Limits.MaxRequestBodySize = ValidationLimits.MaxMediaRequestBytes);
+    options.Limits.MaxRequestBodySize = ValidationLimits.MaxRequestBodyBytes);
 
 var secureCookies = builder.Configuration.GetValue("SecuritySettings:CookieSecure", true);
 var dataProtectionKeysPath = builder.Configuration["DataProtection:KeysPath"];
@@ -109,68 +104,12 @@ builder.Services.AddAuthentication(options =>
 // ─────────────────────────────────────────────
 // 3. RBAC 授權策略
 // ─────────────────────────────────────────────
-builder.Services.AddAuthorization(options =>
-{
-    // 未明確標註 [AllowAnonymous] 的端點一律需要登入。
-    options.FallbackPolicy = new AuthorizationPolicyBuilder()
-        .RequireAuthenticatedUser()
-        .Build();
-
-    // Admin 策略 — 需要 Admin 角色
-    options.AddPolicy("AdminOnly", policy =>
-        policy.RequireRole("Admin"));
-
-    // Authenticated 策略 — 僅需登入
-    options.AddPolicy("Authenticated", policy =>
-        policy.RequireAuthenticatedUser());
-});
+builder.Services.AddFamilyPortalAuthorization();
 
 // ─────────────────────────────────────────────
 // 4. Controllers 與 JSON 配置
 // ─────────────────────────────────────────────
-builder.Services.AddAntiforgery(options =>
-{
-    options.HeaderName = "X-XSRF-TOKEN";
-    options.Cookie.Name = "family_antiforgery";
-    options.Cookie.HttpOnly = true;
-    options.Cookie.SameSite = SameSiteMode.Strict;
-    options.Cookie.SecurePolicy = secureCookies ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest;
-});
-
-builder.Services.AddControllersWithViews(options =>
-    {
-        // Cookie 認證的所有非 GET Controller 請求都必須通過 CSRF 驗證。
-        options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute());
-    })
-    .AddJsonOptions(options =>
-    {
-        // Enum 序列化為字串（非數字）
-        options.JsonSerializerOptions.Converters.Add(
-            new JsonStringEnumConverter(allowIntegerValues: false));
-        // 忽略 null 值屬性
-        options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
-    });
-
-builder.Services.Configure<FormOptions>(options =>
-    options.MultipartBodyLengthLimit = ValidationLimits.MaxMediaRequestBytes);
-
-// 統一 DataAnnotations / ModelState 驗證錯誤格式
-builder.Services.Configure<ApiBehaviorOptions>(options =>
-{
-    options.InvalidModelStateResponseFactory = context =>
-    {
-        var errors = context.ModelState
-            .Where(entry => entry.Value?.Errors.Count > 0)
-            .SelectMany(entry => entry.Value!.Errors.Select(error =>
-                string.IsNullOrWhiteSpace(entry.Key)
-                    ? error.ErrorMessage
-                    : $"{entry.Key}: {error.ErrorMessage}"))
-            .ToList();
-
-        return new BadRequestObjectResult(
-            ApiResponse<object>.Fail("驗證失敗", errors));
-    };
-});
+builder.Services.AddFamilyPortalMvcSecurity(secureCookies);
 
 // ─────────────────────────────────────────────
 // 5. SignalR 配置
@@ -201,50 +140,7 @@ builder.Services.AddOpenApi();
 // ─────────────────────────────────────────────
 // 8. Rate Limiting (速率限制)
 // ─────────────────────────────────────────────
-builder.Services.AddRateLimiter(options =>
-{
-    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    options.AddPolicy("fixed", context =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: FamilyPortalRateLimitPartition.GetPartitionKey(context),
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 100,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0
-            }));
-
-    // 登入端點更嚴格的速率限制（防暴力破解）
-    options.AddPolicy("login", context =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 10,
-                Window = TimeSpan.FromMinutes(5),
-                QueueLimit = 0
-            }));
-
-    options.AddPolicy("refresh", context =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 30,
-                Window = TimeSpan.FromMinutes(5),
-                QueueLimit = 0
-            }));
-
-    options.AddPolicy("media-upload", context =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: FamilyPortalRateLimitPartition.GetPartitionKey(context),
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 10,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0
-            }));
-});
+builder.Services.AddFamilyPortalRateLimiting();
 
 // ─────────────────────────────────────────────
 // 9. Health Checks
@@ -279,10 +175,9 @@ app.UseRateLimiter();
 app.UseAuthorization();
 
 // 路由映射
-app.MapControllers().RequireRateLimiting("fixed");
+app.MapControllers();
 app.MapHub<CalendarHub>(CalendarHub.HubUrl)
-    .RequireAuthorization()
-    .RequireRateLimiting("fixed");
+    .RequireAuthorization();
 app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
 {
     Predicate = _ => false

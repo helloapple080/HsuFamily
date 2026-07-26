@@ -130,7 +130,7 @@ public sealed class MediaControllerTests
         var file = Assert.IsType<FileStreamResult>(action);
         Assert.Equal("image/png", file.ContentType);
         Assert.Equal("nosniff", controller.Response.Headers.XContentTypeOptions);
-        Assert.Equal("public, max-age=300", controller.Response.Headers.CacheControl);
+        Assert.Equal("public, max-age=0, must-revalidate", controller.Response.Headers.CacheControl);
     }
 
     /// <summary>FamilyOnly 成功必須禁止共享與瀏覽器儲存。</summary>

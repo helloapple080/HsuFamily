@@ -10,18 +10,25 @@ public sealed class ApiStartupSourceTests
     public void Program_EnforcesBodyLimitAndSecurityMiddlewareOrder()
     {
         var source = File.ReadAllText(ProgramSourcePath());
+        var registrations = File.ReadAllText(SecurityRegistrationsSourcePath());
         Assert.Contains(
+            "options.Limits.MaxRequestBodySize = ValidationLimits.MaxRequestBodyBytes",
+            source);
+        Assert.DoesNotContain(
             "options.Limits.MaxRequestBodySize = ValidationLimits.MaxMediaRequestBytes",
             source);
         Assert.Contains(
-            "options.MultipartBodyLengthLimit = ValidationLimits.MaxMediaRequestBytes",
-            source);
+            "options.MultipartBodyLengthLimit = ValidationLimits.MaxRequestBodyBytes",
+            registrations);
         Assert.Contains(
             "new JsonStringEnumConverter(allowIntegerValues: false)",
-            source);
+            registrations);
         Assert.Contains(
             "options.AddPolicy(\"media-upload\"",
-            source);
+            registrations);
+        Assert.Contains("options.GlobalLimiter = PartitionedRateLimiter.Create", registrations);
+        Assert.Contains("app.MapControllers();", source);
+        Assert.DoesNotContain("app.MapControllers().RequireRateLimiting(\"fixed\")", source);
 
         var markers = new[]
         {
@@ -71,4 +78,10 @@ public sealed class ApiStartupSourceTests
         Assert.NotNull(directory);
         return Path.Combine(directory!.FullName, "backend", "FamilyPortal.Api", "Program.cs");
     }
+
+    /// <summary>解析 API 安全服務註冊原始碼位置。</summary>
+    private static string SecurityRegistrationsSourcePath() => Path.Combine(
+        Path.GetDirectoryName(ProgramSourcePath())!,
+        "Configuration",
+        "ApiSecurityServiceCollectionExtensions.cs");
 }

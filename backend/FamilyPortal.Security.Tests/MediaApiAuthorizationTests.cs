@@ -68,7 +68,9 @@ public sealed class MediaApiAuthorizationTests
 
         Assert.Equal([1, 2, 3], responseBody.ToArray());
         Assert.Equal("nosniff", actionContext.HttpContext.Response.Headers.XContentTypeOptions);
-        Assert.Equal("public, max-age=300", actionContext.HttpContext.Response.Headers.CacheControl);
+        Assert.Equal(
+            "public, max-age=0, must-revalidate",
+            actionContext.HttpContext.Response.Headers.CacheControl);
         Assert.True(stream.IsDisposed);
     }
 
