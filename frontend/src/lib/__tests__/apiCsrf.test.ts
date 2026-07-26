@@ -105,7 +105,11 @@ describe('API CSRF identity boundaries', () => {
 
   it('invalidates the token after refresh before replaying a failed mutation', async () => {
     const requests: RecordedRequest[] = []
-    const csrfTokens = ['pre-refresh-token', 'post-refresh-token']
+    const csrfTokens = [
+      'pre-refresh-token',
+      'anonymous-refresh-token',
+      'post-refresh-token',
+    ]
     let mutationAttempts = 0
     const adapter: AxiosAdapter = async (config) => {
       requests.push(record(config))
@@ -127,7 +131,7 @@ describe('API CSRF identity boundaries', () => {
     const mutations = requests.filter((request) => request.url.includes('/visibility'))
     assertRequestTokens(mutations, ['pre-refresh-token', 'post-refresh-token'])
     expect(requests.find((request) => request.url === '/api/auth/refresh')?.token)
-      .toBe('pre-refresh-token')
+      .toBe('anonymous-refresh-token')
   })
 
   it.each(['success', 'error'] as const)(

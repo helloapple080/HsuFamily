@@ -61,6 +61,7 @@ async function getCsrfToken(): Promise<string> {
 }
 
 async function refreshSession(): Promise<void> {
+  invalidateCsrfToken()
   const token = await getCsrfToken()
   await sessionClient.post('/api/auth/refresh', undefined, {
     headers: { 'X-XSRF-TOKEN': token },

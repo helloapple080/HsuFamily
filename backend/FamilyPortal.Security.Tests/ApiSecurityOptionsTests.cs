@@ -86,6 +86,43 @@ public sealed class ApiSecurityOptionsTests
         await antiforgery.ValidateRequestAsync(freshValidation);
     }
 
+    /// <summary>已登入 token 在 JWT 過期成為匿名後必須失效，匿名重取 token 才可 refresh。</summary>
+    [Fact]
+    public async Task AntiforgeryToken_AuthenticatedTokenFailsForAnonymousRefresh()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddDataProtection().UseEphemeralDataProtectionProvider();
+        services.AddFamilyPortalMvcSecurity(secureCookies: false);
+        await using var provider = services.BuildServiceProvider();
+        var antiforgery = provider.GetRequiredService<IAntiforgery>();
+        var authenticated = Principal("admin-1", "Admin");
+
+        var authenticatedIssue = Context(provider, authenticated);
+        var authenticatedTokens = antiforgery.GetAndStoreTokens(authenticatedIssue);
+        Assert.NotNull(authenticatedTokens.CookieToken);
+        var anonymous = new ClaimsPrincipal(new ClaimsIdentity());
+        var staleValidation = Context(provider, anonymous);
+        SetTokens(
+            staleValidation,
+            authenticatedTokens.CookieToken!,
+            authenticatedTokens.RequestToken!);
+        await Assert.ThrowsAsync<AntiforgeryValidationException>(() =>
+            antiforgery.ValidateRequestAsync(staleValidation));
+
+        var anonymousIssue = Context(provider, anonymous);
+        anonymousIssue.Request.Headers.Cookie =
+            $"family_antiforgery={authenticatedTokens.CookieToken}";
+        var anonymousTokens = antiforgery.GetAndStoreTokens(anonymousIssue);
+        var freshValidation = Context(provider, anonymous);
+        SetTokens(
+            freshValidation,
+            anonymousTokens.CookieToken ?? authenticatedTokens.CookieToken!,
+            anonymousTokens.RequestToken!);
+
+        await antiforgery.ValidateRequestAsync(freshValidation);
+    }
+
     /// <summary>全域 limiter 必須依 user ID 分區，並保留每分鐘 100 次上限。</summary>
     [Fact]
     public void GlobalRateLimiter_UsesIndependentAuthenticatedPartitions()

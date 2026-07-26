@@ -248,3 +248,14 @@ git commit -m "feat: expose authorized media endpoints"
 - 排除當前環境已知會卡住的 `ApiSecurityIntegrationTests` 後，其餘 backend suite：311/311 passed。
 - Frontend focused CSRF suite：5/5 passed；完整 Vitest：76/76 passed（19 files）；focused 與完整 ESLint 均 exit 0。
 - 未修改 frontend lockfile 或 workspace 設定。
+
+---
+
+## Task 3 CSRF refresh rotation 修正（2026-07-26）
+
+- Access JWT 過期後 refresh request 會以匿名身分通過 authentication，因此 `refreshSession()` 現在先 invalidate 舊 authenticated CSRF cache，再取得目前匿名身分 token 送出 refresh；refresh 成功後再次 invalidate，讓 replay mutation 取得新 authenticated token。
+- Generation guard 持續隔離 identity change 前的 in-flight CSRF request，舊 request 不得回填任何新世代 cache。
+- `/api/auth/csrf` 明確回傳 `Cache-Control: private, no-store` 與 `X-Content-Type-Options: nosniff`，避免身分綁定 token 被瀏覽器或 shared cache 保存。
+- 真實 `IAntiforgery` 回歸驗證 authenticated-issued token 在匿名 refresh context 失敗，重新以匿名身分簽發的 token 成功；controller unit 驗證 token response 的不可快取與 nosniff headers。
+- Frontend direct Vitest 驗證 mutation 的 pre-refresh token、refresh 的 anonymous token、replay 的 post-refresh token 三段輪替，既有 login/logout 與 stale in-flight race 測試均維持通過。
+- Fresh verification：backend build 0 warnings / 0 errors；focused 22/22；排除既知 `ApiSecurityIntegrationTests` 後 313/313；frontend focused 5/5、完整 76/76，focused/full ESLint 與 `tsc --noEmit` 均 exit 0。

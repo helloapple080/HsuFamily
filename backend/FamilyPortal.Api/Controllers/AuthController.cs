@@ -31,6 +31,8 @@ public class AuthController(
     public ActionResult<ApiResponse<CsrfTokenResponse>> GetCsrfToken()
     {
         var tokens = antiforgery.GetAndStoreTokens(HttpContext);
+        Response.Headers.CacheControl = "private, no-store";
+        Response.Headers.XContentTypeOptions = "nosniff";
         return Ok(ApiResponse<CsrfTokenResponse>.Ok(new CsrfTokenResponse
         {
             Token = tokens.RequestToken ?? string.Empty
