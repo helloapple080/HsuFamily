@@ -46,7 +46,8 @@ internal static class WebPImageValidator
             var data = content.Slice(dataOffset, (int)length);
             if (type.SequenceEqual("VP8X"u8))
             {
-                if (canvas is not null || !TryReadVp8X(data, out var width, out var height))
+                if (offset != 12 || canvas is not null || payload is not null ||
+                    !TryReadVp8X(data, out var width, out var height))
                 {
                     return false;
                 }

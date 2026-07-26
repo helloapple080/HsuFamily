@@ -24,7 +24,7 @@ public interface IMediaService
         string userId,
         CancellationToken cancellationToken);
 
-    /// <summary>重試有上限的待清理媒體批次。</summary>
+    /// <summary>重試有上限的待清理媒體批次；僅可由可信任背景工作者或已完成 AdminOnly 授權的入口呼叫。</summary>
     Task<ServiceResult<int>> CleanupPendingAsync(
         int limit,
         CancellationToken cancellationToken);

@@ -17,6 +17,12 @@ public sealed class MediaServiceTests
 {
     private const long MaxUploadBytes = 10 * 1024 * 1024;
 
+    private static MediaService CreateService(
+        IMediaRepository repository,
+        IMediaStorage storage,
+        IImageInspector? imageInspector = null) =>
+        new(repository, storage, imageInspector ?? new HeaderMatchingImageInspector());
+
     /// <summary>公開請求與回應 DTO 不得暴露儲存物件識別碼。</summary>
     [Fact]
     public void MediaDtos_DoNotExposeStorageObjectIdentifiers()
@@ -53,7 +59,7 @@ public sealed class MediaServiceTests
                 width,
                 height)
         };
-        var service = new MediaService(repository, storage);
+        var service = CreateService(repository, storage);
         var request = CreateRequest(bytes, contentType);
         var userId = ObjectId.GenerateNewId().ToString();
 
@@ -81,7 +87,7 @@ public sealed class MediaServiceTests
     {
         var repository = new FakeMediaRepository();
         var storage = new FakeMediaStorage();
-        var service = new MediaService(repository, storage);
+        var service = CreateService(repository, storage);
         var request = CreateRequest("<svg></svg>"u8.ToArray(), "image/png");
 
         var result = await service.UploadAsync(
@@ -100,7 +106,7 @@ public sealed class MediaServiceTests
     {
         var repository = new FakeMediaRepository();
         var storage = new FakeMediaStorage();
-        var service = new MediaService(repository, storage);
+        var service = CreateService(repository, storage);
         var request = CreateRequest(CreatePng(20, 10), "image/jpeg");
 
         var result = await service.UploadAsync(
@@ -121,7 +127,7 @@ public sealed class MediaServiceTests
     {
         var repository = new FakeMediaRepository();
         var storage = new FakeMediaStorage();
-        var service = new MediaService(repository, storage);
+        var service = CreateService(repository, storage);
         var bytes = CreatePng(20, 10).Take(retainedBytes).ToArray();
         var request = CreateRequest(bytes, "image/png");
 
@@ -141,7 +147,7 @@ public sealed class MediaServiceTests
         var bytes = CreatePng(1, 1);
         bytes[bytes.Length - 5] ^= 0x01;
         var storage = new FakeMediaStorage();
-        var service = new MediaService(new FakeMediaRepository(), storage);
+        var service = CreateService(new FakeMediaRepository(), storage);
 
         var result = await service.UploadAsync(
             CreateRequest(bytes, "image/png"),
@@ -164,7 +170,7 @@ public sealed class MediaServiceTests
         paletteChunk.CopyTo(malformed, iendOffset);
         bytes.AsSpan(iendOffset).CopyTo(malformed.AsSpan(iendOffset + paletteChunk.Length));
         var storage = new FakeMediaStorage();
-        var service = new MediaService(new FakeMediaRepository(), storage);
+        var service = CreateService(new FakeMediaRepository(), storage);
 
         var result = await service.UploadAsync(
             CreateRequest(malformed, "image/png"),
@@ -172,6 +178,25 @@ public sealed class MediaServiceTests
             CancellationToken.None);
 
         Assert.Equal(ServiceError.Validation, result.Error);
+        Assert.Null(storage.StoredUpload);
+    }
+
+    /// <summary>PNG 結構合法但 IDAT zlib 資料損毀時，完整解碼器必須拒絕。</summary>
+    [Fact]
+    public async Task UploadAsync_CorruptPngImageDataRejectedByFullDecoder()
+    {
+        var bytes = CorruptPngImageData(CreateBoundaryPng(1, 1));
+        var storage = new FakeMediaStorage();
+        var inspector = new HeaderMatchingImageInspector { RejectAll = true };
+        var service = CreateService(new FakeMediaRepository(), storage, inspector);
+
+        var result = await service.UploadAsync(
+            CreateRequest(bytes, "image/png"),
+            ObjectId.GenerateNewId().ToString(),
+            CancellationToken.None);
+
+        Assert.Equal(ServiceError.Validation, result.Error);
+        Assert.Equal(1, inspector.InvocationCount);
         Assert.Null(storage.StoredUpload);
     }
 
@@ -187,7 +212,7 @@ public sealed class MediaServiceTests
             0xFF, 0xD9
         ];
         var storage = new FakeMediaStorage();
-        var service = new MediaService(new FakeMediaRepository(), storage);
+        var service = CreateService(new FakeMediaRepository(), storage);
 
         var result = await service.UploadAsync(
             CreateRequest(bytes, "image/jpeg"),
@@ -208,7 +233,41 @@ public sealed class MediaServiceTests
         "WEBPVP8X"u8.CopyTo(bytes.AsSpan(8));
         BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(16, 4), 10);
         var storage = new FakeMediaStorage();
-        var service = new MediaService(new FakeMediaRepository(), storage);
+        var service = CreateService(new FakeMediaRepository(), storage);
+
+        var result = await service.UploadAsync(
+            CreateRequest(bytes, "image/webp"),
+            ObjectId.GenerateNewId().ToString(),
+            CancellationToken.None);
+
+        Assert.Equal(ServiceError.Validation, result.Error);
+        Assert.Null(storage.StoredUpload);
+    }
+
+    /// <summary>VP8X 的保留位元非零時必須拒絕。</summary>
+    [Fact]
+    public async Task UploadAsync_WebPReservedBitsReturnsValidation()
+    {
+        var bytes = CreateExtendedWebP(includeLeadingJunk: false, reservedByte: 1);
+        var storage = new FakeMediaStorage();
+        var service = CreateService(new FakeMediaRepository(), storage);
+
+        var result = await service.UploadAsync(
+            CreateRequest(bytes, "image/webp"),
+            ObjectId.GenerateNewId().ToString(),
+            CancellationToken.None);
+
+        Assert.Equal(ServiceError.Validation, result.Error);
+        Assert.Null(storage.StoredUpload);
+    }
+
+    /// <summary>VP8X extended header 不是第一個 chunk 時必須拒絕。</summary>
+    [Fact]
+    public async Task UploadAsync_WebPExtendedHeaderAfterOtherChunkReturnsValidation()
+    {
+        var bytes = CreateExtendedWebP(includeLeadingJunk: true, reservedByte: 0);
+        var storage = new FakeMediaStorage();
+        var service = CreateService(new FakeMediaRepository(), storage);
 
         var result = await service.UploadAsync(
             CreateRequest(bytes, "image/webp"),
@@ -226,7 +285,7 @@ public sealed class MediaServiceTests
         var bytes = CreateWebP(1, 1);
         BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(16, 4), uint.MaxValue);
         var storage = new FakeMediaStorage();
-        var service = new MediaService(new FakeMediaRepository(), storage);
+        var service = CreateService(new FakeMediaRepository(), storage);
 
         var result = await service.UploadAsync(
             CreateRequest(bytes, "image/webp"),
@@ -249,7 +308,7 @@ public sealed class MediaServiceTests
         bytes[51] = 0xFF;
         BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(4, 4), 44);
         var storage = new FakeMediaStorage();
-        var service = new MediaService(new FakeMediaRepository(), storage);
+        var service = CreateService(new FakeMediaRepository(), storage);
 
         var result = await service.UploadAsync(
             CreateRequest(bytes, "image/webp"),
@@ -270,7 +329,7 @@ public sealed class MediaServiceTests
     {
         var bytes = SetPngDimensions(CreatePng(1, 1), width, height);
         var storage = new FakeMediaStorage();
-        var service = new MediaService(new FakeMediaRepository(), storage);
+        var service = CreateService(new FakeMediaRepository(), storage);
 
         var result = await service.UploadAsync(
             CreateRequest(bytes, "image/png"),
@@ -290,7 +349,7 @@ public sealed class MediaServiceTests
         {
             StoreResult = new StoredMediaObject("storage-1", "image/png", bytes.Length, 8000, 5000)
         };
-        var service = new MediaService(new FakeMediaRepository(), storage);
+        var service = CreateService(new FakeMediaRepository(), storage);
 
         var result = await service.UploadAsync(
             CreateRequest(bytes, "image/png"),
@@ -308,7 +367,7 @@ public sealed class MediaServiceTests
     {
         var repository = new FakeMediaRepository();
         var storage = new FakeMediaStorage();
-        var service = new MediaService(repository, storage);
+        var service = CreateService(repository, storage);
         var bytes = new byte[MaxUploadBytes + 1];
         CreatePng(20, 10).CopyTo(bytes, 0);
         var declaredLength = underreportedLength ? MaxUploadBytes : bytes.LongLength;
@@ -335,7 +394,7 @@ public sealed class MediaServiceTests
         var limit = purpose == MediaPurpose.MemberAvatar ? 1 : 30;
         repository.ConflictingSlots.UnionWith(Enumerable.Range(0, limit));
         var storage = new FakeMediaStorage();
-        var service = new MediaService(repository, storage);
+        var service = CreateService(repository, storage);
         var request = CreateRequest(CreatePng(20, 10), "image/png", purpose: purpose);
 
         var result = await service.UploadAsync(
@@ -355,7 +414,7 @@ public sealed class MediaServiceTests
     {
         var repository = new FakeMediaRepository();
         repository.ConflictingSlots.UnionWith([0, 1]);
-        var service = new MediaService(repository, new FakeMediaStorage());
+        var service = CreateService(repository, new FakeMediaStorage());
         var request = CreateRequest(CreatePng(1, 1), "image/png", purpose: MediaPurpose.Worship);
 
         var result = await service.UploadAsync(
@@ -378,7 +437,7 @@ public sealed class MediaServiceTests
     {
         var repository = new FakeMediaRepository();
         var storage = new FakeMediaStorage();
-        var service = new MediaService(repository, storage);
+        var service = CreateService(repository, storage);
         var request = CreateRequest(CreatePng(20, 10), "image/png");
         var userId = ObjectId.GenerateNewId().ToString();
         if (invalidOwner)
@@ -406,7 +465,7 @@ public sealed class MediaServiceTests
             CreateException = new InvalidOperationException("mongo-secret-detail")
         };
         var storage = new FakeMediaStorage();
-        var service = new MediaService(repository, storage);
+        var service = CreateService(repository, storage);
         using var source = new CancellationTokenSource();
 
         var result = await service.UploadAsync(
@@ -418,6 +477,26 @@ public sealed class MediaServiceTests
         Assert.DoesNotContain("mongo-secret-detail", result.Message);
         Assert.Equal("storage-1", storage.DeletedObjectId);
         Assert.Equal(CancellationToken.None, storage.DeleteCancellationToken);
+    }
+
+    /// <summary>儲存供應商名稱若無法讀取，必須在寫入任何物件前失敗。</summary>
+    [Fact]
+    public async Task UploadAsync_ProviderNameFailureOccursBeforeStorage()
+    {
+        var storage = new FakeMediaStorage
+        {
+            ProviderNameException = new InvalidOperationException("provider-name-secret")
+        };
+        var service = CreateService(new FakeMediaRepository(), storage);
+
+        var result = await service.UploadAsync(
+            CreateRequest(CreatePng(1, 1), "image/png"),
+            ObjectId.GenerateNewId().ToString(),
+            CancellationToken.None);
+
+        Assert.Equal(ServiceError.Conflict, result.Error);
+        Assert.DoesNotContain("provider-name-secret", result.Message);
+        Assert.Null(storage.StoredUpload);
     }
 
     /// <summary>補償刪除本身失敗時不得覆蓋原始的中繼資料失敗。</summary>
@@ -432,7 +511,7 @@ public sealed class MediaServiceTests
         {
             DeleteException = new InvalidOperationException("provider-secret")
         };
-        var service = new MediaService(repository, storage);
+        var service = CreateService(repository, storage);
 
         var result = await service.UploadAsync(
             CreateRequest(CreatePng(20, 10), "image/png"),
@@ -454,7 +533,7 @@ public sealed class MediaServiceTests
         {
             StoreException = new OperationCanceledException(source.Token)
         };
-        var service = new MediaService(new FakeMediaRepository(), storage);
+        var service = CreateService(new FakeMediaRepository(), storage);
 
         await Assert.ThrowsAsync<OperationCanceledException>(() => service.UploadAsync(
             CreateRequest(CreatePng(20, 10), "image/png"),
@@ -472,7 +551,7 @@ public sealed class MediaServiceTests
             CreateException = new OperationCanceledException(source.Token)
         };
         var storage = new FakeMediaStorage();
-        var service = new MediaService(repository, storage);
+        var service = CreateService(repository, storage);
 
         await Assert.ThrowsAsync<OperationCanceledException>(() => service.UploadAsync(
             CreateRequest(CreatePng(20, 10), "image/png"),
@@ -489,7 +568,7 @@ public sealed class MediaServiceTests
     {
         var repository = new FakeMediaRepository { Stored = CreateAsset(MediaVisibility.FamilyOnly) };
         var storage = new FakeMediaStorage();
-        var service = new MediaService(repository, storage);
+        var service = CreateService(repository, storage);
 
         var result = await service.OpenReadAsync(repository.Stored.Id, false, CancellationToken.None);
 
@@ -503,7 +582,7 @@ public sealed class MediaServiceTests
     {
         var repository = new FakeMediaRepository { Stored = CreateAsset((MediaVisibility)999) };
         var storage = new FakeMediaStorage();
-        var service = new MediaService(repository, storage);
+        var service = CreateService(repository, storage);
 
         var result = await service.OpenReadAsync(repository.Stored.Id, false, CancellationToken.None);
 
@@ -517,7 +596,7 @@ public sealed class MediaServiceTests
     {
         var repository = new FakeMediaRepository { Stored = CreateAsset((MediaVisibility)999) };
         var storage = new FakeMediaStorage();
-        var service = new MediaService(repository, storage);
+        var service = CreateService(repository, storage);
 
         var result = await service.OpenReadAsync(repository.Stored.Id, true, CancellationToken.None);
 
@@ -532,7 +611,7 @@ public sealed class MediaServiceTests
         var repository = new FakeMediaRepository { Stored = CreateAsset(MediaVisibility.Public) };
         var providerStream = new TrackingMemoryStream([1, 2, 3]);
         var storage = new FakeMediaStorage { ReadStream = providerStream };
-        var service = new MediaService(repository, storage);
+        var service = CreateService(repository, storage);
 
         var result = await service.OpenReadAsync(repository.Stored.Id, false, CancellationToken.None);
 
@@ -554,7 +633,7 @@ public sealed class MediaServiceTests
         {
             ReadException = new InvalidOperationException("provider-secret-detail")
         };
-        var service = new MediaService(repository, storage);
+        var service = CreateService(repository, storage);
 
         var result = await service.OpenReadAsync(repository.Stored.Id, false, CancellationToken.None);
 
@@ -572,7 +651,7 @@ public sealed class MediaServiceTests
         {
             ReadException = new OperationCanceledException(source.Token)
         };
-        var service = new MediaService(repository, storage);
+        var service = CreateService(repository, storage);
 
         await Assert.ThrowsAsync<OperationCanceledException>(() => service.OpenReadAsync(
             repository.Stored.Id,
@@ -586,7 +665,7 @@ public sealed class MediaServiceTests
     {
         var repository = new FakeMediaRepository { Stored = CreateAsset(MediaVisibility.Public) };
         var providerStream = new LazyFailingStream();
-        var service = new MediaService(repository, new FakeMediaStorage { ReadStream = providerStream });
+        var service = CreateService(repository, new FakeMediaStorage { ReadStream = providerStream });
 
         var result = await service.OpenReadAsync(repository.Stored.Id, false, CancellationToken.None);
 
@@ -601,7 +680,7 @@ public sealed class MediaServiceTests
     {
         var repository = new FakeMediaRepository { Stored = CreateAsset(MediaVisibility.Public) };
         var providerStream = new TrackingMemoryStream([1, 2]);
-        var service = new MediaService(repository, new FakeMediaStorage { ReadStream = providerStream });
+        var service = CreateService(repository, new FakeMediaStorage { ReadStream = providerStream });
 
         var result = await service.OpenReadAsync(repository.Stored.Id, false, CancellationToken.None);
 
@@ -617,7 +696,7 @@ public sealed class MediaServiceTests
         asset.SizeBytes = ValidationLimits.MaxMediaBytes;
         var repository = new FakeMediaRepository { Stored = asset };
         var providerStream = new TrackingMemoryStream(new byte[ValidationLimits.MaxMediaBytes + 1]);
-        var service = new MediaService(repository, new FakeMediaStorage { ReadStream = providerStream });
+        var service = CreateService(repository, new FakeMediaStorage { ReadStream = providerStream });
 
         var result = await service.OpenReadAsync(asset.Id, false, CancellationToken.None);
 
@@ -638,7 +717,7 @@ public sealed class MediaServiceTests
         repository.PendingCleanup.AddRange([first, second, third]);
         var storage = new FakeMediaStorage();
         storage.DeleteExceptions["storage-2"] = new InvalidOperationException("temporary");
-        var service = new MediaService(repository, storage);
+        var service = CreateService(repository, storage);
 
         var firstResult = await service.CleanupPendingAsync(500, CancellationToken.None);
         var secondResult = await service.CleanupPendingAsync(500, CancellationToken.None);
@@ -660,7 +739,7 @@ public sealed class MediaServiceTests
         var repository = new FakeMediaRepository();
         repository.PendingCleanup.Add(CreateAsset(MediaVisibility.FamilyOnly));
         var storage = new FakeMediaStorage();
-        var service = new MediaService(repository, storage);
+        var service = CreateService(repository, storage);
         using var source = new CancellationTokenSource();
         source.Cancel();
 
@@ -677,7 +756,7 @@ public sealed class MediaServiceTests
     {
         var repository = new FakeMediaRepository();
         var storage = new FakeMediaStorage();
-        var service = new MediaService(repository, storage);
+        var service = CreateService(repository, storage);
 
         var result = await service.OpenReadAsync("invalid", true, CancellationToken.None);
 
@@ -694,7 +773,7 @@ public sealed class MediaServiceTests
         var operations = new List<string>();
         repository.Operations = operations;
         storage.Operations = operations;
-        var service = new MediaService(repository, storage);
+        var service = CreateService(repository, storage);
 
         var result = await service.DeleteAsync(
             repository.Stored.Id,
@@ -715,7 +794,7 @@ public sealed class MediaServiceTests
         {
             DeleteException = new InvalidOperationException("provider-secret-detail")
         };
-        var service = new MediaService(repository, storage);
+        var service = CreateService(repository, storage);
 
         var result = await service.DeleteAsync(
             repository.Stored.Id,
@@ -738,7 +817,7 @@ public sealed class MediaServiceTests
         {
             DeleteException = new OperationCanceledException(source.Token)
         };
-        var service = new MediaService(repository, storage);
+        var service = CreateService(repository, storage);
 
         await Assert.ThrowsAsync<OperationCanceledException>(() => service.DeleteAsync(
             repository.Stored.Id,
@@ -755,7 +834,7 @@ public sealed class MediaServiceTests
     {
         var repository = new FakeMediaRepository { Stored = CreateAsset(MediaVisibility.FamilyOnly) };
         var storage = new FakeMediaStorage();
-        var service = new MediaService(repository, storage);
+        var service = CreateService(repository, storage);
 
         var result = await service.DeleteAsync(repository.Stored.Id, "invalid", CancellationToken.None);
 
@@ -818,6 +897,40 @@ public sealed class MediaServiceTests
     private static byte[] CreateWebP(int width, int height) => Convert.FromBase64String(
         "UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA");
 
+    private static byte[] CreateExtendedWebP(bool includeLeadingJunk, byte reservedByte)
+    {
+        var payload = CreateWebP(1, 1).AsSpan(12).ToArray();
+        using var webP = new MemoryStream();
+        webP.Write("RIFF"u8);
+        webP.Write([0, 0, 0, 0]);
+        webP.Write("WEBP"u8);
+        if (includeLeadingJunk)
+        {
+            WriteWebPChunk(webP, "JUNK"u8, []);
+        }
+
+        var extendedHeader = new byte[10];
+        extendedHeader[1] = reservedByte;
+        WriteWebPChunk(webP, "VP8X"u8, extendedHeader);
+        webP.Write(payload);
+        var bytes = webP.ToArray();
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(4, 4), (uint)(bytes.Length - 8));
+        return bytes;
+    }
+
+    private static void WriteWebPChunk(Stream destination, ReadOnlySpan<byte> type, byte[] data)
+    {
+        destination.Write(type);
+        Span<byte> length = stackalloc byte[4];
+        BinaryPrimitives.WriteUInt32LittleEndian(length, (uint)data.Length);
+        destination.Write(length);
+        destination.Write(data);
+        if ((data.Length & 1) != 0)
+        {
+            destination.WriteByte(0);
+        }
+    }
+
     private static byte[] CreateBoundaryPng(int width, int height)
     {
         using var compressed = new MemoryStream();
@@ -871,6 +984,28 @@ public sealed class MediaServiceTests
         return bytes;
     }
 
+    private static byte[] CorruptPngImageData(byte[] bytes)
+    {
+        var offset = 8;
+        while (offset <= bytes.Length - 12)
+        {
+            var length = BinaryPrimitives.ReadInt32BigEndian(bytes.AsSpan(offset, 4));
+            if (bytes.AsSpan(offset + 4, 4).SequenceEqual("IDAT"u8))
+            {
+                bytes[offset + 8] ^= 0xFF;
+                var crcLength = 4 + length;
+                BinaryPrimitives.WriteUInt32BigEndian(
+                    bytes.AsSpan(offset + 8 + length, 4),
+                    ComputeCrc32(bytes.AsSpan(offset + 4, crcLength)));
+                return bytes;
+            }
+
+            offset += 12 + length;
+        }
+
+        throw new InvalidOperationException("測試 PNG 缺少 IDAT chunk");
+    }
+
     private static uint ComputeCrc32(ReadOnlySpan<byte> bytes)
     {
         var crc = uint.MaxValue;
@@ -888,7 +1023,17 @@ public sealed class MediaServiceTests
 
     private sealed class FakeMediaStorage : IMediaStorage
     {
-        public string ProviderName { get; init; } = "Fake";
+        private string _providerName = "Fake";
+
+        public string ProviderName
+        {
+            get => ProviderNameException is null
+                ? _providerName
+                : throw ProviderNameException;
+            init => _providerName = value;
+        }
+
+        public Exception? ProviderNameException { get; init; }
         public StoredMediaObject? StoreResult { get; init; }
         public Stream ReadStream { get; init; } = new MemoryStream([1, 2, 3]);
         public Exception? StoreException { get; init; }
@@ -940,6 +1085,49 @@ public sealed class MediaServiceTests
             return exception is null
                 ? Task.CompletedTask
                 : Task.FromException(exception);
+        }
+    }
+
+    private sealed class HeaderMatchingImageInspector : IImageInspector
+    {
+        public bool RejectAll { get; init; }
+        public int InvocationCount { get; private set; }
+
+        /// <inheritdoc />
+        public Task<ImageInspectionResult?> InspectAsync(
+            Stream content,
+            CancellationToken cancellationToken)
+        {
+            InvocationCount++;
+            if (RejectAll)
+            {
+                return Task.FromResult<ImageInspectionResult?>(null);
+            }
+
+            var originalPosition = content.Position;
+            Span<byte> header = stackalloc byte[30];
+            var read = content.Read(header);
+            content.Position = originalPosition;
+            ImageInspectionResult? result = null;
+            if (read >= 24 && header[..8].SequenceEqual(
+                    new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }))
+            {
+                result = new ImageInspectionResult(
+                    "image/png",
+                    BinaryPrimitives.ReadInt32BigEndian(header.Slice(16, 4)),
+                    BinaryPrimitives.ReadInt32BigEndian(header.Slice(20, 4)));
+            }
+            else if (read >= 2 && header[0] == 0xFF && header[1] == 0xD8)
+            {
+                result = new ImageInspectionResult("image/jpeg", 1, 1);
+            }
+            else if (read >= 12 && header[..4].SequenceEqual("RIFF"u8) &&
+                     header.Slice(8, 4).SequenceEqual("WEBP"u8))
+            {
+                result = new ImageInspectionResult("image/webp", 1, 1);
+            }
+
+            return Task.FromResult(result);
         }
     }
 

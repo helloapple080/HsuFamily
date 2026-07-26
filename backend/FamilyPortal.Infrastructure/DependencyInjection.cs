@@ -1,6 +1,7 @@
 using FamilyPortal.Application.Interfaces;
 using FamilyPortal.Infrastructure.Calendar;
 using FamilyPortal.Infrastructure.Hubs;
+using FamilyPortal.Infrastructure.Media;
 using FamilyPortal.Infrastructure.MongoDB;
 using FamilyPortal.Infrastructure.Security;
 using Microsoft.Extensions.Configuration;
@@ -34,6 +35,7 @@ public static class DependencyInjection
         services.AddScoped<IEventRepository, EventRepository>();
         services.AddScoped<IItineraryRepository, ItineraryRepository>();
         services.AddScoped<IMediaRepository, MediaRepository>();
+        services.AddSingleton<IImageInspector, SkiaImageInspector>();
         services.AddScoped<ICalendarNotifier, SignalRCalendarNotifier>();
         services.AddScoped<ILunarRecurrenceService, LunarRecurrenceService>();
 

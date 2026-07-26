@@ -14,14 +14,20 @@ public sealed class MediaService : IMediaService
 
     private readonly IMediaRepository _repository;
     private readonly IMediaStorage _storage;
+    private readonly IImageInspector _imageInspector;
 
     /// <summary>建立媒體 Application service。</summary>
     /// <param name="repository">媒體中繼資料邊界。</param>
     /// <param name="storage">供應商無關的媒體儲存邊界。</param>
-    public MediaService(IMediaRepository repository, IMediaStorage storage)
+    /// <param name="imageInspector">完整解碼影像的供應商無關邊界。</param>
+    public MediaService(
+        IMediaRepository repository,
+        IMediaStorage storage,
+        IImageInspector imageInspector)
     {
         _repository = repository;
         _storage = storage;
+        _imageInspector = imageInspector;
     }
 
     /// <inheritdoc />
@@ -50,6 +56,7 @@ public sealed class MediaService : IMediaService
         {
             validated = await SecureImageUploadValidator.ValidateAsync(
                 request.Upload,
+                _imageInspector,
                 cancellationToken);
         }
         catch (OperationCanceledException)
@@ -67,6 +74,25 @@ public sealed class MediaService : IMediaService
         }
 
         using var validatedContent = validated.Upload.Content;
+        string providerName;
+        try
+        {
+            providerName = _storage.ProviderName;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return ConflictFailure<MediaResponse>("媒體儲存供應商設定無效");
+        }
+
+        if (string.IsNullOrWhiteSpace(providerName))
+        {
+            return ConflictFailure<MediaResponse>("媒體儲存供應商設定無效");
+        }
+
         StoredMediaObject stored;
         try
         {
@@ -92,7 +118,7 @@ public sealed class MediaService : IMediaService
             : ValidationLimits.MaxMediaGalleryItems;
         for (var slot = 0; slot < slotCount; slot++)
         {
-            var asset = BuildAsset(request, userId, stored.ObjectId, validated, slot);
+            var asset = BuildAsset(request, userId, providerName, stored.ObjectId, validated, slot);
             try
             {
                 var createResult = await _repository.TryCreateAsync(asset, cancellationToken);
@@ -345,11 +371,12 @@ public sealed class MediaService : IMediaService
     private MediaAsset BuildAsset(
         UploadMediaRequest request,
         string userId,
+        string providerName,
         string storageObjectId,
         ValidatedMediaUpload validated,
         int slot) => new()
         {
-            StorageProvider = _storage.ProviderName,
+            StorageProvider = providerName,
             StorageObjectId = storageObjectId,
             OriginalFileName = validated.Upload.FileName,
             ContentType = validated.ContentType,

@@ -1,4 +1,5 @@
 using FamilyPortal.Application.Common;
+using FamilyPortal.Application.Interfaces;
 using FamilyPortal.Application.Models;
 
 namespace FamilyPortal.Application.Services;
@@ -10,6 +11,7 @@ internal static class SecureImageUploadValidator
 
     internal static async Task<ValidatedMediaUpload?> ValidateAsync(
         MediaUpload upload,
+        IImageInspector imageInspector,
         CancellationToken cancellationToken)
     {
         if (upload.Content is null || !upload.Content.CanRead ||
@@ -53,6 +55,16 @@ internal static class SecureImageUploadValidator
                 image.ContentType,
                 StringComparison.OrdinalIgnoreCase) ||
             !DimensionsAreAllowed(image.Width, image.Height))
+        {
+            return null;
+        }
+
+        buffered.Position = 0;
+        var decoded = await imageInspector.InspectAsync(buffered, cancellationToken);
+        if (decoded is null ||
+            !string.Equals(decoded.ContentType, image.ContentType, StringComparison.Ordinal) ||
+            decoded.Width != image.Width || decoded.Height != image.Height ||
+            !DimensionsAreAllowed(decoded.Width, decoded.Height))
         {
             return null;
         }
