@@ -247,6 +247,50 @@ public sealed class MediaServiceTests
         Assert.Equal(0, inspector.InvocationCount);
     }
 
+    /// <summary>APNG 的 animation/frame chunks 一律拒絕，避免只解碼 default image。</summary>
+    [Theory]
+    [InlineData("acTL")]
+    [InlineData("fcTL")]
+    [InlineData("fdAT")]
+    public async Task UploadAsync_ApngChunkReturnsValidation(string chunkType)
+    {
+        var bytes = InsertPngChunkBefore(
+            CreateBoundaryPng(1, 1),
+            "IDAT"u8,
+            System.Text.Encoding.ASCII.GetBytes(chunkType),
+            new byte[8]);
+        var storage = new FakeMediaStorage();
+        var inspector = new HeaderMatchingImageInspector();
+        var service = CreateService(new FakeMediaRepository(), storage, inspector);
+
+        var result = await service.UploadAsync(
+            CreateRequest(bytes, "image/png"),
+            ObjectId.GenerateNewId().ToString(),
+            CancellationToken.None);
+
+        Assert.Equal(ServiceError.Validation, result.Error);
+        Assert.Equal(0, inspector.InvocationCount);
+        Assert.Null(storage.StoredUpload);
+    }
+
+    /// <summary>空 IDAT 可以與後續非空 IDAT 連續出現，並仍需完整解碼。</summary>
+    [Fact]
+    public async Task UploadAsync_EmptyIdatBeforeNonEmptyIdatIsAccepted()
+    {
+        var bytes = InsertPngChunkBefore(CreateBoundaryPng(1, 1), "IDAT"u8, "IDAT"u8, []);
+        var storage = new FakeMediaStorage();
+        var inspector = new HeaderMatchingImageInspector();
+        var service = CreateService(new FakeMediaRepository(), storage, inspector);
+
+        var result = await service.UploadAsync(
+            CreateRequest(bytes, "image/png"),
+            ObjectId.GenerateNewId().ToString(),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(1, inspector.InvocationCount);
+    }
+
     /// <summary>PNG 結構合法但 IDAT zlib 資料損毀時，完整解碼器必須拒絕。</summary>
     [Fact]
     public async Task UploadAsync_CorruptPngImageDataRejectedByFullDecoder()
@@ -417,24 +461,28 @@ public sealed class MediaServiceTests
         Assert.True(result.IsSuccess);
     }
 
-    /// <summary>Animation 旗標只有在 ANIM 後接 ANMF 且沒有 still-image payload 時有效。</summary>
+    /// <summary>即使 ANMF 含有結構完整的 VP8 frame payload，animated WebP 仍不支援。</summary>
     [Fact]
-    public async Task UploadAsync_WebPMatchingAnimationChunksAreAccepted()
+    public async Task UploadAsync_WebPAnimationWithFramePayloadReturnsValidation()
     {
+        var frame = CreateWebPAnimationFrame();
         var bytes = CreateExtendedWebP(
             flagByte: 0x02,
             includeLeadingJunk: false,
-            chunksBeforePayload: [("ANIM", new byte[6]), ("ANMF", new byte[16])],
+            chunksBeforePayload: [("ANIM", new byte[6]), ("ANMF", frame)],
             includePayload: false);
         var storage = new FakeMediaStorage();
-        var service = CreateService(new FakeMediaRepository(), storage);
+        var inspector = new HeaderMatchingImageInspector();
+        var service = CreateService(new FakeMediaRepository(), storage, inspector);
 
         var result = await service.UploadAsync(
             CreateRequest(bytes, "image/webp"),
             ObjectId.GenerateNewId().ToString(),
             CancellationToken.None);
 
-        Assert.True(result.IsSuccess);
+        Assert.Equal(ServiceError.Validation, result.Error);
+        Assert.Equal(0, inspector.InvocationCount);
+        Assert.Null(storage.StoredUpload);
     }
 
     /// <summary>ICCP 與 ALPH 等重建必要 chunk 出現在影像資料後必須拒絕。</summary>
@@ -1148,6 +1196,15 @@ public sealed class MediaServiceTests
         {
             destination.WriteByte(0);
         }
+    }
+
+    private static byte[] CreateWebPAnimationFrame()
+    {
+        var framePayload = CreateWebP(1, 1).AsSpan(12).ToArray();
+        var frame = new byte[16 + framePayload.Length];
+        frame[12] = 100;
+        framePayload.CopyTo(frame, 16);
+        return frame;
     }
 
     private static byte[] CreateBoundaryPng(int width, int height)

@@ -174,10 +174,10 @@ git commit -m "feat: expose authorized media endpoints"
 ### 架構與安全修正
 
 - Application 新增供應商無關的 `IImageInspector` 與 `ImageInspectionResult`，不參考任何影像套件。
-- Infrastructure 以 `SkiaSharp 4.150.1` 的 `SKCodec.GetPixels` 完整解碼 JPEG、PNG 與 WebP；只接受 `SKCodecResult.Success`，並比對前置結構檢查所得的格式與尺寸。
+- Infrastructure 以 `SkiaSharp 4.150.1` 的 `SKCodec.GetPixels` 完整解碼靜態 JPEG、PNG 與 WebP；只接受 `SKCodecResult.Success`，並比對前置結構檢查所得的格式與尺寸。APNG 與 animated WebP 一律在前置檢查拒絕，不嘗試只處理第一幀。
 - 保留 10 MB 與 8192 像素單邊上限，並將總像素上限收緊為 1,600 萬（RGBA 約 64 MB）；完整解碼前已執行簽章、chunk/marker、尺寸與像素數前置檢查。
 - `ProviderName` 於 `StoreAsync` 之前只擷取一次並驗證，避免儲存成功後屬性取值例外造成 orphan object。
-- WebP 額外拒絕 VP8X reserved bits 與 VP8X 非第一 chunk；`CleanupPendingAsync` XML 明載僅限可信任背景工作者或 AdminOnly 入口。
+- WebP 額外拒絕 VP8X reserved bits、VP8X 非第一 chunk 與所有 animated WebP（animation flag、ANIM 或 ANMF），避免只解碼 frame 0；`CleanupPendingAsync` XML 明載僅限可信任背景工作者或 AdminOnly 入口。
 
 ### Decoder 授權選型
 
@@ -190,10 +190,10 @@ git commit -m "feat: expose authorized media endpoints"
 
 - 新增真實 Infrastructure inspector 測試：真實 JPEG/PNG/WebP、CRC 正確但 zlib IDAT 損毀的 PNG、entropy 截斷的 JPEG。
 - Application service 回歸涵蓋 PNG forbidden PLTE/chunk order、WebP reserved bits/chunk order、完整解碼器拒絕、ProviderName 在儲存前失敗不寫入物件。真實 inspector 測試已獨立至 `Infrastructure/SkiaImageInspectorTests.cs`，避免再擴張原 service 測試類別。
-- 複審追加：PNG color type 0/4 禁止 PLTE、indexed palette 必填且不得超過 bit depth 項目數；VP8X 實際 flag byte reserved mask 與 ICCP/Alpha/EXIF/XMP/Animation feature gap/order；Skia 完整解碼以共用兩個 slot 的 gate 限制並行，且在等待與解碼後重新觀察取消。
+- 複審追加：PNG color type 0/4 禁止 PLTE、indexed palette 必填且不得超過 bit depth 項目數、拒絕 APNG `acTL`/`fcTL`/`fdAT`，並允許連續 IDAT 中的空 chunk（累計 payload 仍必須大於零）；VP8X 實際 flag byte reserved mask 與 ICCP/Alpha/EXIF/XMP feature gap/order，animation flag/ANIM/ANMF 一律拒絕；Skia 完整解碼以共用兩個 slot 的 gate 限制並行，且在等待與解碼後重新觀察取消。
 - `dotnet build backend/FamilyPortal.Security.Tests/FamilyPortal.Security.Tests.csproj --maxcpucount:1 --no-restore`：成功，0 warnings / 0 errors。
-- focused media suite：81/81 passed。
-- 排除在當前 TestServer 環境會卡住的 `ApiSecurityIntegrationTests` 後，其餘完整後端 suite：284/284 passed。
+- focused media suite：86/86 passed。
+- 排除在當前 TestServer 環境會卡住的 `ApiSecurityIntegrationTests` 後，其餘完整後端 suite：289/289 passed。
 - 完整直接 runner 在 discover/start 後長時間無輸出，已以 Ctrl-C 中止（exit 130）。以 `-longRunning 15 -diagnostics` 重跑定位為既有 `ApiSecurityIntegrationTests.ProductionHttpsResponse_IncludesHsts` 持續超過 59 秒；本批次不將完整 suite 記錄為通過，需由主流程處理此環境性卡住後補跑。
 - `dotnet list backend/FamilyPortal.Infrastructure/FamilyPortal.Infrastructure.csproj package --vulnerable --include-transitive`：NuGet 未回報任何已知易受攻擊的直接或間接套件。
 - 本批次未修改 frontend lockfile 或 workspace 設定。

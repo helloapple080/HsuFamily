@@ -34,8 +34,6 @@ internal static class WebPImageValidator
         var sawAlpha = false;
         var sawExif = false;
         var sawXmp = false;
-        var sawAnimationHeader = false;
-        var sawAnimationFrame = false;
         while (offset <= content.Length - 8)
         {
             var type = content.Slice(offset, 4);
@@ -72,7 +70,7 @@ internal static class WebPImageValidator
             else if (type.SequenceEqual("ICCP"u8))
             {
                 if (canvas is null || sawIccProfile || sawAlpha || payload is not null ||
-                    sawAnimationHeader || sawAnimationFrame || length == 0)
+                    length == 0)
                 {
                     return false;
                 }
@@ -81,8 +79,7 @@ internal static class WebPImageValidator
             }
             else if (type.SequenceEqual("ALPH"u8))
             {
-                if (canvas is null || sawAlpha || payload is not null ||
-                    sawAnimationHeader || sawAnimationFrame || length <= 1)
+                if (canvas is null || sawAlpha || payload is not null || length <= 1)
                 {
                     return false;
                 }
@@ -91,27 +88,15 @@ internal static class WebPImageValidator
             }
             else if (type.SequenceEqual("ANIM"u8))
             {
-                if (canvas is null || sawAnimationHeader || sawAnimationFrame ||
-                    payload is not null || sawAlpha || length != 6)
-                {
-                    return false;
-                }
-
-                sawAnimationHeader = true;
+                return false;
             }
             else if (type.SequenceEqual("ANMF"u8))
             {
-                if (canvas is null || !sawAnimationHeader || payload is not null || length < 16)
-                {
-                    return false;
-                }
-
-                sawAnimationFrame = true;
+                return false;
             }
             else if (type.SequenceEqual("VP8 "u8))
             {
-                if (sawAnimationHeader || sawAnimationFrame || payload is not null ||
-                    !TryReadVp8(data, out var width, out var height))
+                if (payload is not null || !TryReadVp8(data, out var width, out var height))
                 {
                     return false;
                 }
@@ -120,7 +105,7 @@ internal static class WebPImageValidator
             }
             else if (type.SequenceEqual("VP8L"u8))
             {
-                if (sawAnimationHeader || sawAnimationFrame || sawAlpha || payload is not null ||
+                if (sawAlpha || payload is not null ||
                     !TryReadVp8L(data, out var width, out var height))
                 {
                     return false;
@@ -167,29 +152,15 @@ internal static class WebPImageValidator
             return true;
         }
 
-        var isAnimated = HasFlag(extendedFlags, AnimationFlag);
         if (HasFlag(extendedFlags, IccProfileFlag) != sawIccProfile ||
             HasFlag(extendedFlags, ExifFlag) != sawExif ||
             HasFlag(extendedFlags, XmpFlag) != sawXmp ||
-            isAnimated != (sawAnimationHeader && sawAnimationFrame) ||
-            sawAnimationHeader != sawAnimationFrame ||
             HasFlag(extendedFlags, AlphaFlag) != (sawAlpha || payloadIsLossless && HasFlag(extendedFlags, AlphaFlag)))
         {
             return false;
         }
 
-        if (isAnimated)
-        {
-            if (payload is not null)
-            {
-                return false;
-            }
-
-            image = new ImageInfo("image/webp", canvas.Value.Width, canvas.Value.Height);
-            return true;
-        }
-
-        if (payload is null || canvas.Value != payload.Value || sawAnimationHeader || sawAnimationFrame)
+        if (payload is null || canvas.Value != payload.Value)
         {
             return false;
         }
@@ -207,7 +178,7 @@ internal static class WebPImageValidator
         width = 0;
         height = 0;
         flags = 0;
-        if (data.Length != 10 || (data[0] & ReservedFlagMask) != 0 ||
+        if (data.Length != 10 || (data[0] & (ReservedFlagMask | AnimationFlag)) != 0 ||
             data[1] != 0 || data[2] != 0 || data[3] != 0)
         {
             return false;

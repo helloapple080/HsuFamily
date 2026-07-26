@@ -16,6 +16,7 @@ internal static class PngImageValidator
         var offset = Signature.Length;
         var sawHeader = false;
         var sawImageData = false;
+        long imageDataBytes = 0;
         var imageDataEnded = false;
         var sawPalette = false;
         var colorType = 0;
@@ -62,6 +63,12 @@ internal static class PngImageValidator
             {
                 return false;
             }
+            else if (type.SequenceEqual("acTL"u8) ||
+                     type.SequenceEqual("fcTL"u8) ||
+                     type.SequenceEqual("fdAT"u8))
+            {
+                return false;
+            }
             else if (type.SequenceEqual("PLTE"u8))
             {
                 var paletteEntries = length / 3;
@@ -76,16 +83,17 @@ internal static class PngImageValidator
             }
             else if (type.SequenceEqual("IDAT"u8))
             {
-                if (imageDataEnded || length == 0 || colorType == 3 && !sawPalette)
+                if (imageDataEnded || colorType == 3 && !sawPalette)
                 {
                     return false;
                 }
 
                 sawImageData = true;
+                imageDataBytes += length;
             }
             else if (type.SequenceEqual("IEND"u8))
             {
-                if (length != 0 || !sawImageData || end != content.Length)
+                if (length != 0 || !sawImageData || imageDataBytes == 0 || end != content.Length)
                 {
                     return false;
                 }

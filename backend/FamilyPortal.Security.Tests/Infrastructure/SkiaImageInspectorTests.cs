@@ -44,6 +44,22 @@ public sealed class SkiaImageInspectorTests
         Assert.Null(result);
     }
 
+    /// <summary>空 IDAT 後接非空 IDAT 的靜態 PNG 仍可完整解碼。</summary>
+    [Fact]
+    public async Task InspectAsync_PngWithEmptyThenNonEmptyIdatReturnsMetadata()
+    {
+        var inspector = new SkiaImageInspector();
+        var bytes = InsertEmptyIdatBeforeImageData(CreatePng());
+        await using var content = new MemoryStream(bytes);
+
+        var result = await inspector.InspectAsync(content, CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.Equal("image/png", result.ContentType);
+        Assert.Equal(1, result.Width);
+        Assert.Equal(1, result.Height);
+    }
+
     /// <summary>JPEG entropy stream 截斷時不得接受部分解碼結果。</summary>
     [Fact]
     public async Task InspectAsync_JpegWithTruncatedEntropyReturnsNull()
@@ -120,6 +136,32 @@ public sealed class SkiaImageInspectorTests
                     bytes.AsSpan(offset + 8 + length, 4),
                     ComputeCrc32(bytes.AsSpan(offset + 4, length + 4)));
                 return bytes;
+            }
+
+            offset += length + 12;
+        }
+
+        throw new InvalidOperationException("測試 PNG 缺少 IDAT chunk");
+    }
+
+    private static byte[] InsertEmptyIdatBeforeImageData(byte[] bytes)
+    {
+        var offset = 8;
+        while (offset <= bytes.Length - 12)
+        {
+            var length = BinaryPrimitives.ReadInt32BigEndian(bytes.AsSpan(offset, 4));
+            if (bytes.AsSpan(offset + 4, 4).SequenceEqual("IDAT"u8))
+            {
+                var emptyIdat = new byte[12];
+                "IDAT"u8.CopyTo(emptyIdat.AsSpan(4, 4));
+                BinaryPrimitives.WriteUInt32BigEndian(
+                    emptyIdat.AsSpan(8, 4),
+                    ComputeCrc32("IDAT"u8));
+                var result = new byte[bytes.Length + emptyIdat.Length];
+                bytes.AsSpan(0, offset).CopyTo(result);
+                emptyIdat.CopyTo(result, offset);
+                bytes.AsSpan(offset).CopyTo(result.AsSpan(offset + emptyIdat.Length));
+                return result;
             }
 
             offset += length + 12;
