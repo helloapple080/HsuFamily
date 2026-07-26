@@ -63,6 +63,11 @@ services:
       ProxySettings__KnownProxies__0: ${CADDY_PROXY_IP:?CADDY_PROXY_IP is required}
       DataProtection__KeysPath: /app/keys
       AllowedHosts: ${API_DOMAIN:?API_DOMAIN is required}
+      GoogleDrive__Enabled: ${GOOGLE_DRIVE_ENABLED:-false}
+      GoogleDrive__ClientId: ${GOOGLE_DRIVE_CLIENT_ID:-}
+      GoogleDrive__ClientSecret: ${GOOGLE_DRIVE_CLIENT_SECRET:-}
+      GoogleDrive__RefreshToken: ${GOOGLE_DRIVE_REFRESH_TOKEN:-}
+      GoogleDrive__FolderId: ${GOOGLE_DRIVE_FOLDER_ID:-}
     volumes:
       - data_protection_keys:/app/keys
     expose:

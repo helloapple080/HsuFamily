@@ -69,6 +69,60 @@ public sealed class GoogleDriveMediaStorageTests
             source.Token));
     }
 
+    /// <summary>回傳可識別 ID 的無效 metadata 時，必須以不可取消 token 補償且保留主錯誤。</summary>
+    [Theory]
+    [MemberData(nameof(InvalidUploadedMetadataWithObjectId))]
+    public async Task StoreAsync_InvalidUploadedMetadataCompensatesWithoutMaskingPrimaryError(
+        GoogleDriveObjectMetadata invalidMetadata)
+    {
+        var client = new FakeGoogleDriveClient
+        {
+            UploadResult = invalidMetadata,
+            DeleteFailure = new InvalidOperationException("simulated compensation failure")
+        };
+        var storage = CreateStorage(
+            client,
+            new FakeImageInspector(new ImageInspectionResult("image/png", 1, 1)));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            storage.StoreAsync(
+                new MediaUpload(new MemoryStream([1, 2, 3]), "file.png", "image/png", 3),
+                TestContext.Current.CancellationToken));
+
+        Assert.Equal("Google Drive 上傳回應無效", exception.Message);
+        Assert.Equal("object-1", client.DeletedObjectId);
+        Assert.Equal(CancellationToken.None, client.DeleteCancellationToken);
+    }
+
+    /// <summary>空白 upload ID 沒有安全補償目標，必須保留主錯誤且不呼叫 delete。</summary>
+    [Fact]
+    public async Task StoreAsync_MissingUploadedObjectIdFailsWithoutDelete()
+    {
+        var client = new FakeGoogleDriveClient
+        {
+            UploadResult = new GoogleDriveObjectMetadata(
+                string.Empty, ["folder-1"], "image/png", 3)
+        };
+        var storage = CreateStorage(
+            client,
+            new FakeImageInspector(new ImageInspectionResult("image/png", 1, 1)));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => storage.StoreAsync(
+            new MediaUpload(new MemoryStream([1, 2, 3]), "file.png", "image/png", 3),
+            TestContext.Current.CancellationToken));
+
+        Assert.Null(client.DeletedObjectId);
+        Assert.Null(client.DeleteCancellationToken);
+    }
+
+    /// <summary>提供仍有可補償 ID 的無效 upload metadata。</summary>
+    public static TheoryData<GoogleDriveObjectMetadata> InvalidUploadedMetadataWithObjectId => new()
+    {
+        new GoogleDriveObjectMetadata("object-1", ["other-folder"], "image/png", 3),
+        new GoogleDriveObjectMetadata("object-1", ["folder-1"], "image/jpeg", 3),
+        new GoogleDriveObjectMetadata("object-1", ["folder-1"], "image/png", 4)
+    };
+
     /// <summary>讀取前必須驗證物件仍在設定資料夾，且成功 stream 由呼叫端擁有。</summary>
     [Fact]
     public async Task OpenReadAsync_VerifiesParentAndReturnsOwnedStream()
@@ -87,6 +141,54 @@ public sealed class GoogleDriveMediaStorageTests
         Assert.False(returned.IsDisposed);
         result.Dispose();
         Assert.True(returned.IsDisposed);
+    }
+
+    /// <summary>Drive metadata 長度與下載 stream 實際長度不符時必須關閉 stream 並拒絕回傳。</summary>
+    [Fact]
+    public async Task OpenReadAsync_LengthMismatchDisposesDownloadedStream()
+    {
+        var downloaded = new TrackingMemoryStream([1, 2, 3, 4]);
+        var client = new FakeGoogleDriveClient
+        {
+            Metadata = OwnedMetadata(),
+            ReadStream = downloaded
+        };
+        var storage = CreateStorage(client);
+        Stream? unexpectedResult = null;
+
+        var exception = await Record.ExceptionAsync(async () =>
+            unexpectedResult = await storage.OpenReadAsync(
+                "object-1",
+                TestContext.Current.CancellationToken));
+        var disposedByStorage = downloaded.IsDisposed;
+        unexpectedResult?.Dispose();
+
+        Assert.IsType<InvalidOperationException>(exception);
+        Assert.True(disposedByStorage);
+    }
+
+    /// <summary>不可 seek 的下載 stream 無法驗證實際長度，必須關閉並拒絕回傳。</summary>
+    [Fact]
+    public async Task OpenReadAsync_NonSeekableStreamIsDisposed()
+    {
+        var downloaded = new NonSeekableTrackingStream([1, 2, 3]);
+        var client = new FakeGoogleDriveClient
+        {
+            Metadata = OwnedMetadata(),
+            ReadStream = downloaded
+        };
+        var storage = CreateStorage(client);
+        Stream? unexpectedResult = null;
+
+        var exception = await Record.ExceptionAsync(async () =>
+            unexpectedResult = await storage.OpenReadAsync(
+                "object-1",
+                TestContext.Current.CancellationToken));
+        var disposedByStorage = downloaded.IsDisposed;
+        unexpectedResult?.Dispose();
+
+        Assert.IsType<InvalidOperationException>(exception);
+        Assert.True(disposedByStorage);
     }
 
     /// <summary>資料夾外物件不得被讀取。</summary>
@@ -192,8 +294,11 @@ public sealed class GoogleDriveMediaStorageTests
         public Stream ReadStream { get; init; } = new MemoryStream([1, 2, 3]);
         public bool CancelUpload { get; init; }
         public bool DeleteNotFound { get; init; }
+        public GoogleDriveObjectMetadata? UploadResult { get; init; }
+        public Exception? DeleteFailure { get; init; }
         public string? OpenedObjectId { get; private set; }
         public string? DeletedObjectId { get; private set; }
+        public CancellationToken? DeleteCancellationToken { get; private set; }
 
         /// <inheritdoc />
         public async Task<GoogleDriveObjectMetadata> UploadAsync(
@@ -211,7 +316,7 @@ public sealed class GoogleDriveMediaStorageTests
             using var copy = new MemoryStream();
             await content.CopyToAsync(copy, cancellationToken);
             Uploads.Add(new UploadCall(objectName, folderId, copy.ToArray()));
-            return new GoogleDriveObjectMetadata(
+            return UploadResult ?? new GoogleDriveObjectMetadata(
                 $"object-{Uploads.Count}", [folderId], contentType, copy.Length);
         }
 
@@ -239,6 +344,12 @@ public sealed class GoogleDriveMediaStorageTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             DeletedObjectId = objectId;
+            DeleteCancellationToken = cancellationToken;
+            if (DeleteFailure is not null)
+            {
+                return Task.FromException(DeleteFailure);
+            }
+
             return DeleteNotFound
                 ? Task.FromException(new GoogleDriveObjectNotFoundException())
                 : Task.CompletedTask;
@@ -254,6 +365,42 @@ public sealed class GoogleDriveMediaStorageTests
         protected override void Dispose(bool disposing)
         {
             IsDisposed = true;
+            base.Dispose(disposing);
+        }
+    }
+
+    private sealed class NonSeekableTrackingStream(byte[] content) : Stream
+    {
+        private readonly MemoryStream _inner = new(content);
+
+        public bool IsDisposed { get; private set; }
+        public override bool CanRead => _inner.CanRead;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => _inner.Position;
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush() => throw new NotSupportedException();
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            _inner.Read(buffer, offset, count);
+
+        public override long Seek(long offset, SeekOrigin origin) =>
+            throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
+
+        protected override void Dispose(bool disposing)
+        {
+            IsDisposed = true;
+            _inner.Dispose();
             base.Dispose(disposing);
         }
     }

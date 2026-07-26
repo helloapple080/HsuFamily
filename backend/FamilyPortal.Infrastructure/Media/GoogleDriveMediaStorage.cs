@@ -79,13 +79,29 @@ public sealed class GoogleDriveMediaStorage(
         var metadata = await client.GetMetadataAsync(storageObjectId, cancellationToken);
         EnsureReadableAndOwned(metadata);
         var content = await client.OpenReadAsync(storageObjectId, cancellationToken);
-        if (content is null || !content.CanRead)
+        if (content is null)
         {
-            content?.Dispose();
             throw new InvalidOperationException("Google Drive 媒體內容無法讀取");
         }
 
-        return content;
+        try
+        {
+            if (!content.CanRead ||
+                !content.CanSeek ||
+                content.Length is <= 0 or > ValidationLimits.MaxMediaBytes ||
+                content.Length != metadata!.Length)
+            {
+                throw new InvalidOperationException("Google Drive 媒體內容長度無效");
+            }
+
+            content.Position = 0;
+            return content;
+        }
+        catch
+        {
+            content.Dispose();
+            throw;
+        }
     }
 
     /// <inheritdoc />

@@ -1,4 +1,5 @@
 using System.Net;
+using FamilyPortal.Application.Common;
 using Google;
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Auth.OAuth2.Flows;
@@ -97,7 +98,12 @@ public sealed class GoogleDriveClient : IGoogleDriveClient, IDisposable
             FileOptions.Asynchronous | FileOptions.SequentialScan | FileOptions.DeleteOnClose);
         try
         {
-            var progress = await _service.Files.Get(objectId).DownloadAsync(content, cancellationToken);
+            using var cappedContent = new CappedWriteStream(
+                content,
+                ValidationLimits.MaxMediaBytes);
+            var progress = await _service.Files.Get(objectId).DownloadAsync(
+                cappedContent,
+                cancellationToken);
             if (progress.Status != Google.Apis.Download.DownloadStatus.Completed)
             {
                 throw progress.Exception ?? new InvalidOperationException("Google Drive 下載未完成");
@@ -159,4 +165,127 @@ public sealed class GoogleDriveClient : IGoogleDriveClient, IDisposable
         file.MimeType ?? string.Empty,
         file.Size ?? 0,
         file.Trashed ?? false);
+
+    private sealed class CappedWriteStream(Stream inner, long maxLength) : Stream
+    {
+        public override bool CanRead => false;
+        public override bool CanSeek => inner.CanSeek;
+        public override bool CanWrite => inner.CanWrite;
+        public override long Length => inner.Length;
+
+        public override long Position
+        {
+            get => inner.Position;
+            set
+            {
+                EnsurePositionWithinLimit(value);
+                inner.Position = value;
+            }
+        }
+
+        public override void Flush() => inner.Flush();
+
+        public override Task FlushAsync(CancellationToken cancellationToken) =>
+            inner.FlushAsync(cancellationToken);
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
+
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            var target = origin switch
+            {
+                SeekOrigin.Begin => offset,
+                SeekOrigin.Current => checked(inner.Position + offset),
+                SeekOrigin.End => checked(inner.Length + offset),
+                _ => throw new ArgumentOutOfRangeException(nameof(origin))
+            };
+            EnsurePositionWithinLimit(target);
+            return inner.Seek(offset, origin);
+        }
+
+        public override void SetLength(long value)
+        {
+            EnsurePositionWithinLimit(value);
+            inner.SetLength(value);
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            EnsureWriteWithinLimit(count);
+            inner.Write(buffer, offset, count);
+        }
+
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            EnsureWriteWithinLimit(buffer.Length);
+            inner.Write(buffer);
+        }
+
+        public override Task WriteAsync(
+            byte[] buffer,
+            int offset,
+            int count,
+            CancellationToken cancellationToken)
+        {
+            EnsureWriteWithinLimit(count);
+            return inner.WriteAsync(buffer, offset, count, cancellationToken);
+        }
+
+        public override ValueTask WriteAsync(
+            ReadOnlyMemory<byte> buffer,
+            CancellationToken cancellationToken = default)
+        {
+            EnsureWriteWithinLimit(buffer.Length);
+            return inner.WriteAsync(buffer, cancellationToken);
+        }
+
+        public override void WriteByte(byte value)
+        {
+            EnsureWriteWithinLimit(1);
+            inner.WriteByte(value);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            // 底層 temporary stream 的生命週期由 OpenReadAsync 或呼叫端管理。
+            base.Dispose(disposing);
+        }
+
+        private void EnsureWriteWithinLimit(int count)
+        {
+            if (count < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(count));
+            }
+
+            long endPosition;
+            try
+            {
+                endPosition = checked(inner.Position + count);
+            }
+            catch (OverflowException)
+            {
+                throw DownloadLimitExceeded();
+            }
+
+            EnsurePositionWithinLimit(endPosition);
+        }
+
+        private static InvalidDataException DownloadLimitExceeded() =>
+            new("媒體下載內容超過允許大小");
+
+        private void EnsurePositionWithinLimit(long position)
+        {
+            if (position < 0)
+            {
+                throw new IOException("無法移至媒體資料流起點之前");
+            }
+
+            if (position > maxLength)
+            {
+                throw DownloadLimitExceeded();
+            }
+        }
+    }
 }
