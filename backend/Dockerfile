@@ -12,7 +12,7 @@ RUN dotnet restore "FamilyPortal.Api/FamilyPortal.Api.csproj"
 COPY . .
 RUN dotnet publish "FamilyPortal.Api/FamilyPortal.Api.csproj" -c Release -o /app/publish
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.10 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.12 AS runtime
 WORKDIR /app
 EXPOSE 5001
 
