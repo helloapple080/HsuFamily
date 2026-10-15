@@ -53,7 +53,7 @@ jobs:
           --coverlet-output-format cobertura
 
       - name: Upload backend coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: backend-coverage-cobertura
           path: backend/FamilyPortal.Security.Tests/TestResults/coverage.cobertura.*.xml
@@ -123,7 +123,7 @@ jobs:
 
       - name: Upload SBOM
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom-cyclonedx
           path: sbom.cdx.json
