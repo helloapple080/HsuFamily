@@ -1,5 +1,5 @@
 # 後端 Dockerfile — .NET 10 Multi-stage Build
-FROM mcr.microsoft.com/dotnet/sdk:10.0.302 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.402 AS build
 WORKDIR /src
 
 COPY ["FamilyPortal.Api/FamilyPortal.Api.csproj", "FamilyPortal.Api/"]
