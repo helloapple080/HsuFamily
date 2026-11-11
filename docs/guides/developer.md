@@ -2,6 +2,14 @@
 
 [切換至使用者手冊](user.md) · [瀏覽器版](developer.html)
 
+## 精簡版開發分支
+
+`codex/supabase-portal` 正在把網站整合成一個 Next.js 部署，並由 Supabase 提供登入、PostgreSQL 和私人照片空間。現階段只有資料層、權限和農曆規則底層；以下原版的 Docker 部署說明仍適用，尚不能以本分支替換正式站。
+
+- `supabase/migrations/202611110001_portal_foundation.sql` 包含角色名單、農曆規則與私人儲存政策。一般帳號不得自授權，且未核准或被撤權的帳號不可讀取。照片桶尚未開放上傳，待伺服器檔案驗證及附件關聯完成。
+- 在 `frontend` 執行 `pnpm test src/lib/hosted`，用嵌入式 PostgreSQL 執行遷移和角色測試。測試模擬 Supabase 身分與儲存資料表，不代表已驗證託管 Supabase 的 Auth 或 Storage API。
+- 只在隔離的 Supabase 測試專案套用遷移，使用假資料驗收。不得把正式資料匯入預覽環境。匯入前先備份現有 MongoDB，並核對重複週期、角色和照片關聯；密碼不隨資料遷移。下一階段接上 Next.js 的登入及行事曆，保留公開展示版。
+
 ## 1. 架構與成本
 
 以同一台主機執行 Docker Compose。外部請求由 Cloudflare Tunnel 進入 Caddy。Caddy 將網頁送往 Next.js，將 `/api/*` 和 `/hubs/*` 送往 .NET。瀏覽器使用同一個 HTTPS 網域，API 和 SignalR 共用現有登入 Cookie。

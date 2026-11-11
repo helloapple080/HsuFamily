@@ -21,6 +21,16 @@ declare module 'lunar-javascript' {
     getFestivals(): string[]
   }
 
+  export class LunarMonth {
+    getMonth(): number
+    getDayCount(): number
+  }
+
+  export class LunarYear {
+    static fromYear(year: number): LunarYear
+    getMonthsInYear(): LunarMonth[]
+  }
+
   export class HolidayUtil {
     static getHoliday(year: number, month: number, day: number): unknown
   }

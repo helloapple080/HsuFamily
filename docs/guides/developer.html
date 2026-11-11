@@ -23,6 +23,17 @@
 
 <p><a href="user.html">切換至使用者手冊</a> · <a href="developer.html">瀏覽器版</a></p>
 
+<h2>精簡版開發分支<span><a href="#label-E7-B2-BE-E7-B0-A1-E7-89-88-E9-96-8B-E7-99-BC-E5-88-86-E6-94-AF">&para;</a> <a href="#top">&uarr;</a></span></h2>
+
+<p><code>codex/supabase-portal</code> 正在把網站整合成一個 Next.js 部署，並由 Supabase 提供登入、PostgreSQL 和私人照片空間。現階段只有資料層、權限和農曆規則底層；以下原版的 Docker 部署說明仍適用，尚不能以本分支替換正式站。</p>
+<ul><li>
+<p><code>supabase/migrations/202611110001_portal_foundation.sql</code> 包含角色名單、農曆規則與私人儲存政策。一般帳號不得自授權，且未核准或被撤權的帳號不可讀取。照片桶尚未開放上傳，待伺服器檔案驗證及附件關聯完成。</p>
+</li><li>
+<p>在 <code>frontend</code> 執行 <code>pnpm test src/lib/hosted</code>，用嵌入式 PostgreSQL 執行遷移和角色測試。測試模擬 Supabase 身分與儲存資料表，不代表已驗證託管 Supabase 的 Auth 或 Storage API。</p>
+</li><li>
+<p>只在隔離的 Supabase 測試專案套用遷移，使用假資料驗收。不得把正式資料匯入預覽環境。匯入前先備份現有 MongoDB，並核對重複週期、角色和照片關聯；密碼不隨資料遷移。下一階段接上 Next.js 的登入及行事曆，保留公開展示版。</p>
+</li></ul>
+
 <h2>1. 架構與成本<span><a href="#label-1.+-E6-9E-B6-E6-A7-8B-E8-88-87-E6-88-90-E6-9C-AC">&para;</a> <a href="#top">&uarr;</a></span></h2>
 
 <p>以同一台主機執行 Docker Compose。外部請求由 Cloudflare Tunnel 進入 Caddy。Caddy 將網頁送往 Next.js，將 <code>/api/*</code> 和 <code>/hubs/*</code> 送往 .NET。瀏覽器使用同一個 HTTPS 網域，API 和 SignalR 共用現有登入 Cookie。</p>
