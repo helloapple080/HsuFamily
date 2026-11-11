@@ -1,0 +1,45 @@
+http://{$PORTAL_DOMAIN}:8080 {
+	@foreign not remote_ip {$TUNNEL_CONNECTOR_IP}
+	@insecure not header X-Forwarded-Proto https
+	@upload {
+		method POST
+		path /api/media /api/media/
+	}
+	@api path /api /api/* /hubs /hubs/*
+	@health path /health /health/*
+
+	route {
+		respond @foreign 403
+		respond @insecure 400
+		respond @health 404
+
+		handle @upload {
+			request_body {
+				max_size 10551296
+			}
+			reverse_proxy backend:5001 {
+				header_up X-Forwarded-Proto https
+				header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
+				header_down Cache-Control "private, no-store"
+			}
+		}
+
+		handle @api {
+			request_body {
+				max_size 1048576
+			}
+			reverse_proxy backend:5001 {
+				header_up X-Forwarded-Proto https
+				header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
+				header_down Cache-Control "private, no-store"
+			}
+		}
+
+		handle {
+			encode zstd gzip
+			reverse_proxy frontend:3000 {
+				header_up X-Forwarded-Proto https
+			}
+		}
+	}
+}

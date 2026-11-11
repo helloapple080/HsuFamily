@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>許氏入口網開發與部署手冊</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, "PingFang TC", sans-serif; }
+    body { max-width: 48rem; margin: auto; padding: 2rem 1.25rem 4rem; line-height: 1.75; }
+    h1, h2 { line-height: 1.3; }
+    h2 { margin-top: 2rem; border-top: 1px solid GrayText; padding-top: 1rem; }
+    a { text-underline-offset: .2em; }
+    pre { overflow-x: auto; padding: 1rem; border: 1px solid GrayText; border-radius: .5rem; }
+    code, tt { overflow-wrap: anywhere; }
+    li + li { margin-top: .35rem; }
+    @media print { nav { display: none; } pre { white-space: pre-wrap; } h2 { break-after: avoid; } }
+  </style>
+</head>
+<body>
+  <nav aria-label="手冊切換"><a href="user.html">家人使用</a> · <a href="developer.html">開發與部署</a></nav>
+  <main>
+<h1>許氏入口網開發與部署手冊<span><a href="#label-E8-A8-B1-E6-B0-8F-E5-85-A5-E5-8F-A3-E7-B6-B2-E9-96-8B-E7-99-BC-E8-88-87-E9-83-A8-E7-BD-B2-E6-89-8B-E5-86-8A">&para;</a> <a href="#top">&uarr;</a></span></h1>
+
+<p><a href="user.html">切換至使用者手冊</a> · <a href="developer.html">瀏覽器版</a></p>
+
+<h2>1. 架構與成本<span><a href="#label-1.+-E6-9E-B6-E6-A7-8B-E8-88-87-E6-88-90-E6-9C-AC">&para;</a> <a href="#top">&uarr;</a></span></h2>
+
+<p>以同一台主機執行 Docker Compose。外部請求由 Cloudflare Tunnel 進入 Caddy。Caddy 將網頁送往 Next.js，將 <code>/api/*</code> 和 <code>/hubs/*</code> 送往 .NET。瀏覽器使用同一個 HTTPS 網域，API 和 SignalR 共用現有登入 Cookie。</p>
+<ul><li>
+<p><strong>前端</strong>：Next.js 16 App Router、TypeScript、TanStack Query、Zustand。正式版使用 standalone build。</p>
+</li><li>
+<p><strong>後端</strong>：.NET 10。Domain 定義領域模型，Application 處理用例和介面，Infrastructure 實作 MongoDB、媒體儲存與登入等服務，API 負責 HTTP 與組裝。</p>
+</li><li>
+<p><strong>資料</strong>：MongoDB 儲存成員、拜拜、行程、登入與圖片中繼資料。資料庫與 Data Protection keys 放在持久 volume。既有 MongoDB 先備份，再以測試還原確認相容性。</p>
+</li><li>
+<p><strong>照片</strong>：功能分支已有 Google Drive 私有儲存與上傳底層。頁面相簿整合仍待完成。一般部署保持 <code>GOOGLE_DRIVE_ENABLED=false</code>。R2 可透過新增 <code>IMediaStorage</code> 實作接入，切換前須驗證照片權限、資料遷移與回復。</p>
+</li><li>
+<p><strong>費用</strong>：已有長開主機、網路與網域時，Cloudflare Tunnel 無須加購月費。主機電費、備份空間、網域註冊與續費取決於現有資源。Firebase/D1 會增加 MongoDB 搬遷與重驗成本。</p>
+</li></ul>
+
+<p><a href="https://developers.cloudflare.com/tunnel/get-started/">Cloudflare Tunnel</a> · <a href="https://developers.cloudflare.com/r2/pricing/">R2 定價</a></p>
+
+<h2>2. 本機開發<span><a href="#label-2.+-E6-9C-AC-E6-A9-9F-E9-96-8B-E7-99-BC">&para;</a> <a href="#top">&uarr;</a></span></h2>
+
+<p>準備 .NET 10 SDK、Node.js 22、pnpm 10.33 與 MongoDB 7。使用獨立的開發資料庫。從 <code>.env.example</code> 建立開發用 <code>.env</code>，填入 MongoDB 密碼、JWT 簽章金鑰與初始管理員密碼。開發容器預設綁 loopback。</p>
+
+<pre>docker compose up -d --build
+docker compose ps</pre>
+
+<p>瀏覽器開啟 <code>http://localhost:3000。API</code> 預設在 <code>http://localhost:5001</code>。若改用 <code>pnpm dev</code> 或直接啟動 API，先停止占用對應連接埠的開發容器；自行設定主機上的開發資料庫連線，不可使用正式設定。</p>
+
+<p>平時可從 <code>frontend</code> 執行 <code>pnpm dev</code>、<code>pnpm lint</code>、<code>pnpm test</code>、<code>pnpm build</code>。在 <code>backend</code> 執行 <code>dotnet build FamilyPortal.slnx</code> 與 <code>dotnet test --project FamilyPortal.Security.Tests/FamilyPortal.Security.Tests.csproj</code>。CI 的版本、依賴掃描與建置設定位於 <code>.github/workflows/ci.yml</code>。</p>
+
+<p>新增功能時，先在 Application 定義用例和儲存介面，再由 Infrastructure 實作，API Controller 處理 HTTP、驗證與授權。前端在 <code>frontend/src/components/features</code> 維護功能元件，使用 API client 與 React Query。新增資料寫入時，驗證成員與管理員權限、Cookie／CSRF 流程、資料庫索引及資料相容性。</p>
+
+<h2>3. 準備正式主機<span><a href="#label-3.+-E6-BA-96-E5-82-99-E6-AD-A3-E5-BC-8F-E4-B8-BB-E6-A9-9F">&para;</a> <a href="#top">&uarr;</a></span></h2>
+<ol><li>
+<p>使用可長開且有出站網路的主機，安裝 Docker Engine 和 Docker Compose v2.24.4 以上。磁碟要容納資料庫、映像與備份。確認容器網段與主機/VPN 不衝突。</p>
+</li><li>
+<p>先決定 Compose 專案名與資料來源。若沿用既有 Compose volume，保持原專案名並核對實際 volume 名稱。跨主機或跨專案名時，先從備份還原到獨立環境。避免把新建空 volume 認成資料搬遷成功。</p>
+</li><li>
+<p>從 <code>.env.example</code> 建立正式機的 <code>.env</code> 並限制檔案讀取權限。填入 MongoDB 管理和應用密碼、隨機 JWT 簽章金鑰、一次性初始管理員密碼。不要把真實設定、備份或憑證放入 Git。</p>
+</li><li>
+<p><code>PORTAL_DOMAIN</code> 與 <code>API_DOMAIN</code> 皆填同一個主機名，例如 <code>family.example.com</code>，不含 scheme。Tunnel 模式只使用這個主機名。</p>
+</li><li>
+<p>在 Cloudflare 建立具名 Tunnel。把 connector token 放進正式機的 <code>CLOUDFLARE_TUNNEL_TOKEN</code>。在 Published applications 將該網域指到 <code>http://caddy:8080</code>。若設定 HTTP Host Header，使用相同的正式主機名。啟用對外 HTTP 轉 HTTPS，並為家族入口網主機名設定 Cache Bypass，避免 CDN 快取私人回應。</p>
+</li></ol>
+
+<h2>4. 啟動與驗收<span><a href="#label-4.+-E5-95-9F-E5-8B-95-E8-88-87-E9-A9-97-E6-94-B6">&para;</a> <a href="#top">&uarr;</a></span></h2>
+
+<p>從專案根目錄執行以下指令。用 <code>config --quiet</code> 驗證插值，避免把完整含秘密的 Compose 配置印到終端或 CI。</p>
+
+<pre>docker compose -f docker-compose.production.yml -f docker-compose.tunnel.yml config --quiet
+docker compose -f docker-compose.production.yml -f docker-compose.tunnel.yml up -d --build
+docker compose -f docker-compose.production.yml -f docker-compose.tunnel.yml ps</pre>
+<ul><li>
+<p>後端狀態應為 healthy。Tunnel dashboard 應顯示 connector 已連線。Docker 應只在容器網路提供服務，主機無對外發布的容器 port。</p>
+</li><li>
+<p>用 HTTPS 開啟正式網域並登入。匿名請求 <code>/api/auth/me</code> 應回傳 401。檢查登入 Cookie 含 Secure 與 HttpOnly。普通成員可閱讀，直接呼叫管理寫入 API 應被拒絕。測試資料應使用獨立帳號和資料庫。</p>
+</li><li>
+<p>用兩個已登入的瀏覽器測試行事曆同步，查看 <code>/hubs/calendar</code> 的 WebSocket 連線。斷線重連後核對畫面資料。</p>
+</li><li>
+<p>圖片功能啟用後，確認管理員能上傳 10 MiB 內的有效靜態圖片、超額與不合法檔案遭拒，未登入者無法讀取私人照片。正式家庭資料預設維持私人。</p>
+</li><li>
+<p>確認資料筆數和原主機一致、驗證備份可還原，並保存本次驗收的 commit SHA、時間和負責人。</p>
+</li></ul>
+
+<h2>5. 資料備份、升級與故障處理<span><a href="#label-5.+-E8-B3-87-E6-96-99-E5-82-99-E4-BB-BD-E3-80-81-E5-8D-87-E7-B4-9A-E8-88-87-E6-95-85-E9-9A-9C-E8-99-95-E7-90-86">&para;</a> <a href="#top">&uarr;</a></span></h2>
+<ul><li>
+<p>定期匯出 MongoDB 資料，以加密方式存到不同裝置或備份服務。首次上線與升級前建立備份。資料還原應先在隔離環境驗證，核對文件筆數、索引、登入和行事曆。</p>
+</li><li>
+<p>保留 Data Protection keys volume。若更換主機，依安全政策備份、轉移金鑰與設定。Drive 照片本體需另行備份，MongoDB 備份只含其中繼資料。</p>
+</li><li>
+<p>上線時記下已驗證的 Git commit 和容器版本。升級失敗可重新部署先前版本。涉及資料格式變更時，先核對相容性和還原程序。避免執行 <code>docker compose down -v</code>，它會刪除資料 volumes。</p>
+</li><li>
+<p>網站 502 時，先看 Cloudflare connector、Caddy 與 API 健康狀態。圖片上傳 413 時，確認命中 <code>POST /api/media</code> 專用規則及 API 的 10 MiB 檔案限制。登入重導迴圈時檢查 HTTPS、正式 Host 和可信代理設定。</p>
+</li><li>
+<p>Tunnel token 疑似外洩時，在 Cloudflare 輪替並重啟 connector。日常監控應包括連線狀態、API 錯誤、磁碟空間和備份完成率。</p>
+</li></ul>
+
+<p>以下範例在正式主機產生一份僅目前使用者可讀的備份。請再加密及移到異地備份位置。備份時間應選在暫停資料寫入或資料異動少的時段；需要一致性快照時，安排停寫。</p>
+
+<pre>umask 077
+docker compose -f docker-compose.production.yml -f docker-compose.tunnel.yml \
+  exec -T mongodb sh -c &#39;exec mongodump --username familyportal_root --password &quot;$MONGO_INITDB_ROOT_PASSWORD&quot; --authenticationDatabase admin --db FamilyPortal --archive --gzip&#39; \
+  &gt; &quot;familyportal-$(date +%Y%m%d-%H%M%S).archive.gz&quot;</pre>
+
+<p>還原演練只使用隔離的測試主機及全新測試 volume。執行前用 <code>docker context show</code> 與 <code>docker compose ps</code> 核對目標，不可連到正式資料庫。先只啟動 MongoDB 並等候健康檢查通過，避免 API 先寫入初始資料。還原後再啟動測試入口網，不連正式 Tunnel，核對資料、索引與登入。</p>
+
+<pre>docker compose -f docker-compose.production.yml -f docker-compose.tunnel.yml up -d --wait mongodb
+docker compose -f docker-compose.production.yml -f docker-compose.tunnel.yml \
+  exec -T mongodb sh -c &#39;exec mongorestore --username familyportal_root --password &quot;$MONGO_INITDB_ROOT_PASSWORD&quot; --authenticationDatabase admin --archive --gzip --nsInclude &quot;FamilyPortal.*&quot;&#39; \
+  &lt; familyportal-YYYYMMDD-HHMMSS.archive.gz</pre>
+
+<h2>6. 維護文件<span><a href="#label-6.+-E7-B6-AD-E8-AD-B7-E6-96-87-E4-BB-B6">&para;</a> <a href="#top">&uarr;</a></span></h2>
+
+<p><code>docs/guides/*.md</code> 是來源。修改後執行 <code>ruby docs/guides/render.rb</code> 更新兩個免連網 HTML。執行 <code>ruby docs/guides/render.rb --check</code> 檢查輸出是否與 Markdown 同步。</p>
+
+<p><a href="../04-部署與維運手冊.md">原部署與維運手冊</a> · <a href="../02-系統與架構全覽.md">架構文件</a></p>
+  </main>
+</body>
+</html>

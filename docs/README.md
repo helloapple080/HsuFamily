@@ -8,6 +8,11 @@ code_baseline: 57d1110
 
 # 許氏入口網文件中心
 
+## 開發與使用手冊
+
+- 開發者：[Markdown](./guides/developer.md) · [HTML](./guides/developer.html)，含 Cloudflare Tunnel、驗收與備份。
+- 家人：[Markdown](./guides/user.md) · [HTML](./guides/user.html)，含登入、農曆行事曆及介面操作。
+
 ## 公開展示網站
 
 GitHub Pages 唯讀展示版：<https://helloapple080.github.io/HsuFamily/>

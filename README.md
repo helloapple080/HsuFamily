@@ -2,6 +2,9 @@
 
 [完整文件中心](./docs/README.md) · [企業級工程與安全治理簡報](./docs/presentation/HsuFamily-Enterprise-Readiness.pptx) · [MIT License](./LICENSE)
 
+- 開發與正式部署手冊：[Markdown](./docs/guides/developer.md) · [HTML](./docs/guides/developer.html)
+- 家人使用手冊：[Markdown](./docs/guides/user.md) · [HTML](./docs/guides/user.html)
+
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?style=flat-square&logo=dotnet)](https://dotnet.microsoft.com/)
 [![Next.js 16](https://img.shields.io/badge/Next.js-16-000000?style=flat-square&logo=next.js)](https://nextjs.org/)
 [![MongoDB](https://img.shields.io/badge/MongoDB-7.0+-47A248?style=flat-square&logo=mongodb)](https://www.mongodb.com/)
@@ -91,7 +94,7 @@ pnpm dev
 # 前端啟動於 http://localhost:3000
 ```
 
-### Docker 一鍵部署
+### Docker 本機開發
 
 ```bash
 docker compose up -d
