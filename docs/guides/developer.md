@@ -4,11 +4,13 @@
 
 ## 精簡版開發分支
 
-`codex/supabase-portal` 的精簡版已接通登入、家人角色和農曆拜拜規則。它只需要部署一個 Next.js 應用程式，由 Supabase 管理登入和 PostgreSQL，不必運行 .NET 或 MongoDB。家庭成員、歷年行程、私人照片頁面和資料遷移尚未接入。以下原版的 Docker 部署說明仍適用；此預覽版不能替換正式站。
+`codex/supabase-portal` 的精簡版包含家人登入、農曆拜拜規則、活動月曆、成員、行程搜尋與私人照片。只需部署 Next.js 應用程式及 Supabase，不必運行 .NET 或 MongoDB。原版仍保留；在隔離雲端驗收、資料核對及還原演練前不可切換正式站。
+
+私人家用可先用 Vercel Hobby 搭配 Supabase Free，不需買網域。Supabase Free 含 500 MB 資料庫與 1 GB 檔案空間，低活動約一週可能暫停。照片、流量與備份仍需管理，免費層不是可用性保證。[Vercel 方案](https://vercel.com/docs/plans) · [Supabase 費率](https://supabase.com/pricing)
 
 ### 啟動隔離預覽
 
-1. 建立獨立的 Supabase 測試專案，只使用虛構資料。透過 SQL Editor 套用 `supabase/migrations/202611110001_portal_foundation.sql`。不要在不明確的專案執行遷移。
+1. 建立獨立的 Supabase 測試專案，只使用虛構資料。在確認專案 ID 後，按檔名順序套用 `supabase/migrations/` 下的 SQL（從 `202611110001_portal_foundation.sql` 到 `202611120003_calendar_events.sql`）。已手動套用的遷移不要重跑。照片政策需要 Supabase Storage 提供 `storage.allow_any_operation`。
 2. 關閉公開註冊，透過 Supabase Dashboard 的 Authentication 建立兩個測試帳號，確認信箱狀態。用各自的 Auth UUID 在 SQL Editor 授權（下例 UUID 必須換成該專案的測試帳號 UUID）：
 
 ```sql
@@ -17,22 +19,35 @@ insert into public.portal_access (user_id, role) values
   ('<測試家人 UUID>', 'User');
 ```
 
-3. 本機在 `frontend/.env.local` 設定下列變數後執行 `pnpm dev`。雲端預覽把建置根目錄設為 `frontend`，使用固定的 HTTPS 預覽網址作為 `PORTAL_ORIGIN`，不要加結尾斜線。只使用 Supabase 的 Publishable key，不能使用 service-role 或 secret key。
+3. 本機在 `frontend/.env.local` 設定下列變數後執行 `pnpm dev`。Vercel 預覽用獨立專案，Root Directory 設為 `frontend`，使用固定 HTTPS 網址作為 `PORTAL_ORIGIN`（不加結尾斜線，不使用每次部署都不同的網址）。Supabase 只用 Publishable key，不用 service-role 或 secret key。
 
 ```dotenv
 NEXT_PUBLIC_PORTAL_MODE=supabase
 PORTAL_ORIGIN=http://localhost:3000
 SUPABASE_URL=https://YOUR-TEST-PROJECT.supabase.co
 SUPABASE_PUBLISHABLE_KEY=sb_publishable_REPLACE_ME
+PORTAL_PHOTO_UPLOAD_KEY=<同一測試專案的 64 位十六進位隨機值>
 ```
 
-4. 以管理員新增每年農曆八月十五、切換 2026 和 2036、編輯和刪除。一般家人應能讀取，直接呼叫寫入 API 應回 403；未登入、未核准或移除角色的帳號應回 401。登出後重整也應回登入頁。跨站寫入應回 403。HTTPS 登入時檢查 Cookie 有 HttpOnly、Secure、SameSite=Strict，私人 API 回應有 `Cache-Control: private, no-store`。
+4. 用密碼管理工具或 `openssl rand -hex 32` 為每個環境產生獨立的上傳密鑰。把同一值存為伺服器環境變數和隔離資料庫的 `portal_private.storage_upload_key` 單筆資料；不要加 `NEXT_PUBLIC_` 前綴，也不要寫入 Git、聊天、共用手冊或日誌。下列 SQL 的參數須由管理者透過私密的資料庫操作注入，不要在共用編輯器儲存含真實值的查詢：
 
-登入和規則 API 使用同源 `/api/hosted`，伺服器驗證身分、查詢最新的家人角色並驗證輸入；資料庫仍以 RLS 限制讀寫。不要在 CDN 對私人 API 啟用快取。公開展示版優先採用靜態輸出，不包含私人 API；不設 `NEXT_PUBLIC_PORTAL_MODE` 則保留舊版 API。
+```sql
+insert into portal_private.storage_upload_key (singleton, secret)
+values (true, decode('<私密上傳密鑰>', 'hex'))
+on conflict (singleton) do update set secret = excluded.secret;
+```
 
-在 `frontend` 執行 `pnpm test`、`pnpm lint`、`pnpm audit:prod`、`NEXT_PUBLIC_PORTAL_MODE=supabase pnpm build`，另執行 `pnpm build:pages` 和 `pnpm test:pages`。RLS 測試使用嵌入式 PostgreSQL；登入測試用真實 SDK 搭配模擬的 Auth 服務，涵蓋 Cookie、撤權及遠端故障時的本機登出。這些測試不能取代託管 Auth 驗收。
+5. 以管理員建立及編輯拜拜規則、月曆活動、成員與行程，切換 2026／2036，查詢行程，為每種可掛照片的紀錄上傳並讀取測試圖片。檢查假圖片、超過 2 MiB、重複槽位、帶照片刪除紀錄都被拒絕。一般家人只能讀，不能產生 Storage 簽名網址；未登入或撤權後立即不能取得圖片。跨站寫入應回 403。HTTPS Cookie 應有 HttpOnly、Secure、SameSite=Strict，私人 API 應有 `Cache-Control: private, no-store`。
 
-正式上線前，先補齊功能與安全驗收，演練備份／還原及回復舊版。匯入前備份現有 MongoDB，核對角色、重複週期與照片關聯；密碼不遷移，正式資料不進預覽環境。
+登入與資料使用同源 `/api/hosted`；API 和 RLS 各自檢查角色。照片走私人桶，伺服器驗證實際格式、縮圖成 WebP 並去除 EXIF 後，才發出限帳號、檔名與期限的上傳憑證。Storage 不與應用資料共用交易；若並行刪除造成殘留物件，普通家人仍讀不到，應在測試專案驗證補償與管理員清理流程。不得用 SQL 刪除 Storage 物件。公開展示版不包含私人 API；不設 `NEXT_PUBLIC_PORTAL_MODE` 則保留舊版 API。[Storage 權限](https://supabase.com/docs/guides/storage/security/access-control)
+
+在 `frontend` 執行 `pnpm test`、`pnpm lint`、`pnpm audit:prod`、`NEXT_PUBLIC_PORTAL_MODE=supabase pnpm build`，另執行 `pnpm build:pages` 和 `pnpm test:pages`。RLS 測試使用嵌入式 PostgreSQL；登入和照片測試用真實 SDK 搭配模擬服務。這些測試不能取代託管 Auth 與 Storage 的驗收。
+
+### 搬遷、備份與回復
+
+先用[離線搬遷與還原手冊](../superpowers/notes/2026-11-12-legacy-converter.md)轉換假資料，核對成員、行程、月曆、關聯及筆數。工具不搬登入密碼或舊照片；照片與原始檔需另作核對。切換前備份現有 MongoDB、舊照片、Supabase SQL 資料及 Storage 圖片本體，分開加密備份並演練還原。資料庫備份不含 Storage 檔案。[Supabase 備份說明](https://supabase.com/docs/guides/platform/backups)
+
+正式上線前保留原站與備份；若新站失敗，回到原站並保存新站變更以供對帳。不要讓兩站同時接受正式寫入。正式資料不進預覽環境。
 
 ## 1. 架構與成本
 

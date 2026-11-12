@@ -4,6 +4,9 @@ import { z } from 'zod'
 import type { UserInfo } from '@/types/auth'
 import type { HostedGateway } from './portal'
 import { worshipRule } from './worship-contract'
+import { createFamilyStore } from './family-store'
+import { createPhotoStore } from './photo-store'
+import { createEventStore } from './event-store'
 
 const row = z.strictObject({
   id: z.uuid(),
@@ -98,6 +101,9 @@ export async function createHostedGateway(config: PortalConfig) {
 
   const gateway: HostedGateway = {
     readUser,
+    family: createFamilyStore(client),
+    photos: createPhotoStore(client),
+    events: createEventStore(client),
     async signIn(email, password) {
       const { data, error } = await client.auth.signInWithPassword({ email, password })
       if (error?.status && (error.status === 429 || error.status >= 500)) throw error

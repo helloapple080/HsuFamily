@@ -101,8 +101,8 @@ const api = axios.create({
 
 api.interceptors.request.use(async (config) => {
   if (isHostedMode) {
-    if (config.url?.startsWith('/api/auth/')) {
-      config.url = config.url.replace('/api/auth/', '/api/hosted/auth/')
+    if (config.url && /^\/api\/(?:auth|members|itineraries|events)(?:\/|$)/.test(config.url)) {
+      config.url = config.url.replace('/api/', '/api/hosted/')
     }
     return config
   }
@@ -124,7 +124,8 @@ api.interceptors.response.use(
     const originalRequest = error.config as RetryableRequestConfig | undefined
     if (isHostedMode) {
       // 登入頁自己處理登入失敗；資料請求 401 代表本機身分已失效。
-      if (error.response?.status === 401 && originalRequest?.url?.startsWith('/api/hosted/worship')) {
+      if (error.response?.status === 401 && originalRequest?.url?.startsWith('/api/hosted/') &&
+          !originalRequest.url.startsWith('/api/hosted/auth/')) {
         useAuthStore.getState().logout()
       }
       return Promise.reject(error)

@@ -16,12 +16,6 @@ const nextConfig: NextConfig = isDemoMode
       output: "standalone",
       ...(isHostedMode && {
         pageExtensions: ["hosted.ts", "tsx", "ts", "jsx", "js"],
-        async redirects() {
-          return [
-            { source: "/members", destination: "/calendar", permanent: false },
-            { source: "/itineraries", destination: "/calendar", permanent: false },
-          ];
-        },
       }),
     };
 

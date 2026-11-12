@@ -5,6 +5,7 @@ import type { Itinerary, UpsertItineraryRequest } from '@/types/event'
 import type { ApiResponse } from '@/types/api'
 import api from '@/lib/api'
 import { toast } from 'sonner'
+import { isAxiosError } from 'axios'
 import { isDemoMode } from '@/lib/demo/config'
 import { demoItineraries } from '@/lib/demo/fixtures'
 import { rejectDemoWrite } from '@/lib/demo/actions'
@@ -105,6 +106,8 @@ export function useDeleteItinerary() {
       toast.success('已刪除行程')
       queryClient.invalidateQueries({ queryKey: ['itineraries'] })
     },
-    onError: (err: Error) => toast.error('刪除失敗', { description: err.message }),
+    onError: (error: Error) => toast.error('刪除失敗', {
+      description: isAxiosError<ApiResponse<null>>(error) ? error.response?.data?.message ?? '請稍後再試' : error.message,
+    }),
   })
 }

@@ -10,9 +10,11 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useDeleteMember, useMembers } from '@/hooks/useMembers'
+import { isHostedMode } from '@/lib/hosted/mode'
+import PrivatePhotos from '@/components/features/media/PrivatePhotos'
 
 export default function MembersPage() {
-  const { data: members = [], isLoading } = useMembers()
+  const { data: members = [], isLoading, isError, refetch } = useMembers()
   const deleteMutation = useDeleteMember()
 
   return (
@@ -39,6 +41,10 @@ export default function MembersPage() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4" role="status" aria-label="成員資料載入中">
           {[1, 2, 3, 4].map((key) => <Skeleton key={key} className="h-64 w-full rounded-xl" />)}
         </div>
+      ) : isError ? (
+        <p role="alert">無法載入家人資料。<Button variant="ghost" onClick={() => void refetch()}>重試</Button></p>
+      ) : members.length === 0 ? (
+        <p className="text-sm text-muted-foreground">尚未建立家庭成員資料。</p>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           {members.map((member) => (
@@ -59,7 +65,7 @@ export default function MembersPage() {
                           </Button>
                         }
                         title={`刪除成員 ${member.name}？`}
-                        description="成員資料刪除後無法復原，請確認後再繼續。"
+                        description={isHostedMode ? '如有頭像，請先從頭像區移除。刪除成員後無法復原。' : '成員資料刪除後無法復原，請確認後再繼續。'}
                         onConfirm={async () => { await deleteMutation.mutateAsync(member.id) }}
                       />
                     </div>
@@ -76,13 +82,16 @@ export default function MembersPage() {
                       <CardTitle className="truncate text-lg">{member.name}</CardTitle>
                       <p className="truncate text-sm text-[var(--muted-foreground)]">{member.title}</p>
                     </div>
-                    {member.bloodType && <Badge variant="secondary" className="shrink-0 text-xs">{member.bloodType}型</Badge>}
+                    {isHostedMode && !member.isActive
+                      ? <Badge variant="outline" className="shrink-0 text-xs">已隱藏</Badge>
+                      : member.bloodType && <Badge variant="secondary" className="shrink-0 text-xs">{member.bloodType}型</Badge>}
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3 pb-5">
                   <p className="line-clamp-3 break-words text-sm text-[var(--muted-foreground)]">{member.bio || '尚未留下個人介紹'}</p>
                   <p className="flex items-center gap-2 text-xs text-[var(--muted-foreground)]"><span>國曆生日</span><span>{member.birthday ? member.birthday.split('T')[0] : '--'}</span></p>
                   <p className="flex items-center gap-2 text-xs text-[var(--lunar)]"><span>農曆生日</span><span>{member.lunarBirthday?.displayText || '--'}</span></p>
+                  {isHostedMode && <PrivatePhotos kind="members" id={member.id} title={member.name} />}
                 </CardContent>
               </Card>
             </article>

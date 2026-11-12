@@ -57,6 +57,9 @@ export function ItineraryDialog({ itinerary, children }: ItineraryDialogProps) {
       tags: itinerary?.tags || [],
       participants: itinerary?.participants || [],
       photos: itinerary?.photos || [],
+      endDate: itinerary?.endDate,
+      notes: itinerary?.notes,
+      linkedEventId: itinerary?.linkedEventId,
     }
     try {
       if (itinerary) await updateMutation.mutateAsync({ id: itinerary.id, data: payload })

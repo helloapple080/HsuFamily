@@ -12,12 +12,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useDeleteItinerary, useItineraries } from '@/hooks/useItineraries'
+import { isHostedMode } from '@/lib/hosted/mode'
+import PrivatePhotos from '@/components/features/media/PrivatePhotos'
 
 export default function ItinerariesPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const deleteMutation = useDeleteItinerary()
-  const { data, fetchNextPage, hasNextPage, isFetching, isFetchingNextPage, status } = useItineraries(debouncedQuery)
+  const { data, fetchNextPage, hasNextPage, isFetching, isFetchingNextPage, status, refetch } = useItineraries(debouncedQuery)
 
   return (
     <div className="space-y-6">
@@ -33,7 +35,7 @@ export default function ItinerariesPage() {
           <form onSubmit={(event) => { event.preventDefault(); setDebouncedQuery(searchQuery) }} className="flex flex-1 gap-2">
             <div className="flex-1">
               <Label htmlFor="itinerary-search" className="sr-only">搜尋行程</Label>
-              <Input id="itinerary-search" type="search" autoComplete="off" maxLength={200} placeholder="搜尋行程…" className="h-11 w-full bg-[var(--secondary)] sm:w-64 glass-input" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} />
+              <Input id="itinerary-search" type="search" autoComplete="off" maxLength={isHostedMode ? 100 : 200} placeholder="搜尋行程…" className="h-11 w-full bg-[var(--secondary)] sm:w-64 glass-input" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} />
             </div>
             <Button type="submit" variant="secondary" className="h-11 gap-2">
               <Search aria-hidden="true" />
@@ -57,7 +59,7 @@ export default function ItinerariesPage() {
             {Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="mb-3 h-24 w-full rounded-lg" />)}
           </div>
         ) : status === 'error' ? (
-          <p className="py-12 text-center text-[var(--muted-foreground)]">無法載入行程資料</p>
+          <p role="alert" className="py-12 text-center text-muted-foreground">無法載入行程資料。<Button variant="ghost" onClick={() => void refetch()}>重試</Button></p>
         ) : data.pages[0]?.length === 0 ? (
           <p className="py-12 text-center text-[var(--muted-foreground)]">找不到相關行程</p>
         ) : (
@@ -81,19 +83,23 @@ export default function ItinerariesPage() {
                       </div>
                       <div className="hidden shrink-0 gap-1.5 md:flex">{item.tags.map((tag) => <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>)}</div>
                       <AdminOnly>
-                        <div className="absolute right-2 top-1/2 flex -translate-y-1/2 gap-2">
+                        <div className="absolute right-2 top-6 flex gap-2">
                           <ItineraryDialog itinerary={item}>
                             <Button variant="secondary" size="icon" className="size-11" aria-label={`編輯行程：${item.title}`}><Pencil aria-hidden="true" /></Button>
                           </ItineraryDialog>
                           <ConfirmDialog
                             trigger={<Button variant="destructive" size="icon" className="size-11" aria-label={`刪除行程：${item.title}`}><Trash2 aria-hidden="true" /></Button>}
                             title={`刪除行程 ${item.title}？`}
-                            description="行程紀錄刪除後無法復原，請確認後再繼續。"
+                            description={isHostedMode ? '如有照片，請先從照片區移除。刪除行程後無法復原。' : '行程紀錄刪除後無法復原，請確認後再繼續。'}
                             onConfirm={async () => { await deleteMutation.mutateAsync(item.id) }}
                           />
                         </div>
                       </AdminOnly>
                     </CardContent>
+                    {isHostedMode && <CardContent className="space-y-2 pb-3">
+                      {item.description && <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">{item.description}</p>}
+                      <PrivatePhotos kind="itineraries" id={item.id} title={item.title} />
+                    </CardContent>}
                   </Card>
                 </article>
               )

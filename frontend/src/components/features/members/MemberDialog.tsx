@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useCreateMember, useUpdateMember } from '@/hooks/useMembers'
 import { formatLunarDate } from '@/lib/lunar'
+import { isHostedMode } from '@/lib/hosted/mode'
 import type { Member, UpsertMemberRequest } from '@/types/member'
 
 export const memberSchema = z.object({
@@ -29,6 +30,7 @@ export const memberSchema = z.object({
   lunarBirthdayMonth: z.number().int().min(1, '月份必須介於 1 到 12').max(12, '月份必須介於 1 到 12').nullable().optional(),
   lunarBirthdayDay: z.number().int().min(1, '日期必須介於 1 到 30').max(30, '日期必須介於 1 到 30').nullable().optional(),
   isLunarLeapMonth: z.boolean().optional(),
+  isActive: z.boolean().optional(),
 }).superRefine((data, context) => {
   const hasMonth = data.lunarBirthdayMonth != null
   const hasDay = data.lunarBirthdayDay != null
@@ -54,7 +56,8 @@ export function buildMemberPayload(data: MemberFormValues, member?: Member): Ups
     bloodType: data.bloodType,
     bio: data.bio,
     sortOrder: member?.sortOrder ?? 0,
-    isActive: member?.isActive ?? true,
+    isActive: data.isActive ?? member?.isActive ?? true,
+    contactInfo: member?.contactInfo,
     birthday,
     lunarBirthday: hasLunarBirthday ? {
       year: lunarYear,
@@ -78,6 +81,7 @@ export function MemberDialog({ member, children }: MemberDialogProps) {
       name: member?.name || '', title: member?.title || '', bloodType: member?.bloodType || '', bio: member?.bio || '',
       birthday: member?.birthday ? member.birthday.split('T')[0] : '', lunarBirthdayMonth: member?.lunarBirthday?.month || null,
       lunarBirthdayDay: member?.lunarBirthday?.day || null, isLunarLeapMonth: member?.lunarBirthday?.isLeapMonth || false,
+      isActive: member?.isActive ?? true,
     },
   })
 
@@ -154,6 +158,10 @@ export function MemberDialog({ member, children }: MemberDialogProps) {
             <Textarea id="member-bio" className="glass-input resize-none" autoComplete="off" rows={3} maxLength={4000} aria-invalid={Boolean(errors.bio)} aria-describedby={errors.bio ? 'member-bio-error' : undefined} {...register('bio')} />
             {errors.bio && <p id="member-bio-error" role="alert" className="text-xs text-destructive">{errors.bio.message}</p>}
           </div>
+          {isHostedMode && <div className="flex min-h-11 items-center gap-2">
+            <input id="member-visible" type="checkbox" {...register('isActive')} className="size-5" />
+            <Label htmlFor="member-visible" className="cursor-pointer">向家人顯示此成員及頭像</Label>
+          </div>}
           <div className="flex justify-end gap-2 pt-4">
             <Button type="button" variant="ghost" className="h-11" disabled={isPending} onClick={() => setOpen(false)}>取消</Button>
             <Button type="submit" className="h-11 glass-button" disabled={isPending}>{isPending ? '儲存中…' : '儲存'}</Button>

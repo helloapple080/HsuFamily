@@ -30,7 +30,7 @@ const navItems = [
   { href: '/calendar', label: '行事曆', icon: CalendarDays, description: '國農曆雙顯示' },
   { href: '/members', label: '家庭成員', icon: Users, description: '成員資料管理' },
   { href: '/itineraries', label: '歷年行程', icon: MapPinned, description: '行程紀錄查詢' },
-].filter((item) => !isHostedMode || item.href === '/calendar')
+]
 
 interface PortalLayoutProps {
   children: React.ReactNode

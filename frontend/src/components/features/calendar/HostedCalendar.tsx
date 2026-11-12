@@ -9,6 +9,8 @@ import { getWorshipDates } from '@/lib/hosted/worship'
 import type { WorshipInput, WorshipRule } from '@/lib/hosted/worship-contract'
 import { useAuthStore } from '@/stores/authStore'
 import WorshipEditor from './WorshipEditor'
+import PrivatePhotos from '@/components/features/media/PrivatePhotos'
+import { isAxiosError } from 'axios'
 
 const emptyRule: WorshipInput = { title: '', lunarMonth: 1, lunarDay: 1, leapMonthPolicy: 'RegularOnly', notes: '' }
 const emptyRules: WorshipRule[] = []
@@ -58,22 +60,29 @@ export default function HostedCalendar() {
           </ul>
         )
       )}
-      {isAdmin && (
-        <section aria-label="管理拜拜規則" className="space-y-3 border-t border-border pt-4">
-          <Button type="button" onClick={() => setEditor('new')}>新增規則</Button>
-          {editor && <WorshipEditor key={editor === 'new' ? 'new' : editor.id}
+      {(isAdmin || (rules.isSuccess && entries.length > 0)) && (
+        <section aria-label="拜拜規則與照片" className="space-y-3 border-t border-border pt-4">
+          <h2 className="text-lg font-semibold">拜拜規則與照片</h2>
+          {isAdmin && <Button type="button" onClick={() => setEditor('new')}>新增規則</Button>}
+          {isAdmin && editor && <WorshipEditor key={editor === 'new' ? 'new' : editor.id}
             initial={editor === 'new' ? emptyRule : editor} onCancel={() => setEditor(null)}
             onSave={async (input) => {
               await save.mutateAsync({ input, id: editor === 'new' ? undefined : editor.id })
               setEditor((current) => current === editor ? null : current)
             }} />}
-          {remove.isError && <p role="alert">刪除未完成，請稍後再試。</p>}
+          {remove.isError && <p role="alert">{isAxiosError(remove.error) && remove.error.response?.status === 409
+            ? '請先移除這筆規則的照片，再刪除規則。' : '刪除未完成，請稍後再試。'}</p>}
           <ul className="space-y-2">
-            {entries.map((rule) => <li key={rule.id} className="flex flex-wrap items-center gap-2">
-              <span className="mr-auto">{rule.title}</span>
-              <Button type="button" variant="outline" aria-label={`編輯 ${rule.title}`} onClick={() => setEditor(rule)}>編輯</Button>
-              <Button type="button" variant="destructive" aria-label={`刪除 ${rule.title}`} disabled={remove.isPending}
-                onClick={() => { if (window.confirm(`確定刪除「${rule.title}」？`)) remove.mutate(rule.id) }}>刪除</Button>
+            {entries.map((rule) => <li key={rule.id} className="space-y-2 rounded-md border border-border p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="mr-auto break-words font-medium">{rule.title}</span>
+                {isAdmin && <>
+                  <Button type="button" variant="outline" aria-label={`編輯 ${rule.title}`} onClick={() => setEditor(rule)}>編輯</Button>
+                  <Button type="button" variant="destructive" aria-label={`刪除 ${rule.title}`} disabled={remove.isPending}
+                    onClick={() => { if (window.confirm(`確定刪除「${rule.title}」？`)) remove.mutate(rule.id) }}>刪除</Button>
+                </>}
+              </div>
+              <PrivatePhotos kind="worship" id={rule.id} title={rule.title} />
             </li>)}
           </ul>
         </section>

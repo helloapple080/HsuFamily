@@ -61,6 +61,30 @@ describe('精簡版 HTTP 流程', () => {
     expect((await call(`worship/${id}`, 'DELETE')).status).toBe(403)
   })
 
+  it('家庭成員與行程端點會在呼叫儲存層前檢查身分與寫入權限', async () => {
+    const { call, login } = preview()
+    expect((await call('members')).status).toBe(401)
+    await login(member.email)
+    expect((await call('members', 'POST', {})).status).toBe(403)
+    expect((await call(`itineraries/${id}`, 'DELETE')).status).toBe(403)
+  })
+
+  it('未登入不能讀取照片，普通家人與跨來源不能更動照片', async () => {
+    const { call, login } = preview()
+    expect((await call(`photos/members/${id}/1`)).status).toBe(401)
+    await login(member.email)
+    expect((await call(`photos/members/${id}/1`, 'PUT', {})).status).toBe(403)
+    expect((await call(`photos/members/${id}/1`, 'DELETE', undefined, 'https://outside.test')).status).toBe(403)
+  })
+
+  it('活動月曆讀取需登入，活動寫入需管理員', async () => {
+    const { call, login } = preview()
+    expect((await call('events')).status).toBe(401)
+    await login(member.email)
+    expect((await call('events', 'POST', {})).status).toBe(403)
+    expect((await call(`events/${id}`, 'DELETE')).status).toBe(403)
+  })
+
   it('管理員能建立規則，家人重新登入後能讀取，登出後再次拒絕', async () => {
     const { call, login } = preview()
     expect((await login(admin.email)).status).toBe(200)

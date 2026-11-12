@@ -35,7 +35,7 @@ export default function LegacyCalendar() {
   const emptyDays = Array.from({ length: new Date(year, month - 1, 1).getDay() })
   const queryStart = utcDayStart(startOfWeek(startOfMonth(currentDate)))
   const queryEnd = utcDayEnd(endOfWeek(endOfMonth(currentDate)))
-  const { data: events = [], isLoading } = useCalendarEvents(queryStart, queryEnd)
+  const { data: events = [], isLoading, isError, refetch } = useCalendarEvents(queryStart, queryEnd)
   const { on } = useSignalR()
   const queryClient = useQueryClient()
 
@@ -94,6 +94,8 @@ export default function LegacyCalendar() {
         <CardContent>
           {isLoading ? (
             <div className="flex h-[400px] items-center justify-center" role="status">載入行事曆中…</div>
+          ) : isError ? (
+            <p role="alert">無法載入行事曆。<Button type="button" variant="ghost" onClick={() => void refetch()}>重試</Button></p>
           ) : (
             <>
               <div className="overflow-x-auto overscroll-x-contain pb-2">
