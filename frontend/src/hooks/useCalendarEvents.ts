@@ -17,7 +17,7 @@ export function useCalendarEvents(start: string, end: string) {
       if (isDemoMode) {
         return demoEvents.filter((event) => event.startDate <= end && (event.endDate ?? event.startDate) >= start)
       }
-      const res = await api.get<ApiResponse<CalendarEvent[]>>('/api/events', {
+      const res = await api.get<ApiResponse<CalendarEvent[]>>('/api/hosted/events', {
         params: { start, end },
       })
       if (!res.data.success) throw new Error(res.data.message)
@@ -36,7 +36,7 @@ export function useCalendarEvent(id: string | null, enabled = true) {
         if (!event) throw new Error('找不到來源事件')
         return { ...event }
       }
-      const res = await api.get<ApiResponse<CalendarEvent>>(`/api/events/${id}`)
+      const res = await api.get<ApiResponse<CalendarEvent>>(`/api/hosted/events/${id}`)
       if (!res.data.success || !res.data.data) throw new Error(res.data.message || '找不到來源事件')
       return res.data.data
     },
@@ -50,7 +50,7 @@ export function useCreateEvent() {
   return useMutation({
     mutationFn: async (data: UpsertEventRequest) => {
       if (isDemoMode) return rejectDemoWrite()
-      const res = await api.post<ApiResponse<CalendarEvent>>('/api/events', data)
+      const res = await api.post<ApiResponse<CalendarEvent>>('/api/hosted/events', data)
       if (!res.data.success) throw new Error(res.data.message)
       return res.data.data
     },
@@ -74,7 +74,7 @@ export function useUpdateEvent() {
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: UpsertEventRequest }) => {
       if (isDemoMode) return rejectDemoWrite()
-      const res = await api.put<ApiResponse<CalendarEvent>>(`/api/events/${id}`, data)
+      const res = await api.put<ApiResponse<CalendarEvent>>(`/api/hosted/events/${id}`, data)
       if (!res.data.success) throw new Error(res.data.message)
       return res.data.data
     },
@@ -98,7 +98,7 @@ export function useDeleteEvent() {
   return useMutation({
     mutationFn: async (id: string) => {
       if (isDemoMode) return rejectDemoWrite()
-      const res = await api.delete<ApiResponse<boolean>>(`/api/events/${id}`)
+      const res = await api.delete<ApiResponse<boolean>>(`/api/hosted/events/${id}`)
       if (!res.data.success) throw new Error(res.data.message)
       return res.data.data
     },

@@ -37,8 +37,8 @@ describe('accessible bounded forms', () => {
 
   it('adds login autocomplete and backend-aligned input limits', () => {
     render(<LoginForm />)
-    expect(screen.getByLabelText('帳號')).toHaveAttribute('autocomplete', 'username')
-    expect(screen.getByLabelText('帳號')).toHaveAttribute('maxlength', '254')
+    expect(screen.getByLabelText('電子信箱')).toHaveAttribute('autocomplete', 'username')
+    expect(screen.getByLabelText('電子信箱')).toHaveAttribute('maxlength', '254')
     expect(screen.getByLabelText('密碼')).toHaveAttribute('autocomplete', 'current-password')
     expect(screen.getByLabelText('密碼')).toHaveAttribute('maxlength', '128')
   })

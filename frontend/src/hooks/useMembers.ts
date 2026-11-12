@@ -15,7 +15,7 @@ export function useMembers() {
     queryKey: ['members'],
     queryFn: async () => {
       if (isDemoMode) return [...demoMembers]
-      const res = await api.get<ApiResponse<Member[]>>('/api/members')
+      const res = await api.get<ApiResponse<Member[]>>('/api/hosted/members')
       if (!res.data.success) throw new Error(res.data.message)
       return res.data.data ?? []
     },
@@ -28,7 +28,7 @@ export function useCreateMember() {
   return useMutation({
     mutationFn: async (data: UpsertMemberRequest) => {
       if (isDemoMode) return rejectDemoWrite()
-      const res = await api.post<ApiResponse<Member>>('/api/members', data)
+      const res = await api.post<ApiResponse<Member>>('/api/hosted/members', data)
       if (!res.data.success) throw new Error(res.data.message)
       return res.data.data
     },
@@ -52,7 +52,7 @@ export function useUpdateMember() {
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: UpsertMemberRequest }) => {
       if (isDemoMode) return rejectDemoWrite()
-      const res = await api.put<ApiResponse<Member>>(`/api/members/${id}`, data)
+      const res = await api.put<ApiResponse<Member>>(`/api/hosted/members/${id}`, data)
       if (!res.data.success) throw new Error(res.data.message)
       return res.data.data
     },
@@ -76,7 +76,7 @@ export function useDeleteMember() {
   return useMutation({
     mutationFn: async (id: string) => {
       if (isDemoMode) return rejectDemoWrite()
-      const res = await api.delete<ApiResponse<boolean>>(`/api/members/${id}`)
+      const res = await api.delete<ApiResponse<boolean>>(`/api/hosted/members/${id}`)
       if (!res.data.success) throw new Error(res.data.message)
       return res.data.data
     },

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import CalendarPage from '@/app/(portal)/calendar/page'
+import ActivityCalendar from '@/components/features/calendar/ActivityCalendar'
 import { EventDialog } from '@/components/features/calendar/EventDialog'
 import { useAuthStore } from '@/stores/authStore'
 import type { CalendarEvent } from '@/types/event'
@@ -34,8 +34,6 @@ vi.mock('@/hooks/useCalendarEvents', () => ({
   useCreateEvent: () => ({ mutateAsync: mutations.create, isPending: false }),
   useUpdateEvent: () => ({ mutateAsync: mutations.update, isPending: false }),
 }))
-vi.mock('@/hooks/useSignalR', () => ({ useSignalR: () => ({ on: () => () => undefined }) }))
-vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ invalidateQueries: vi.fn() }) }))
 vi.mock('@/lib/lunar', () => ({
   solarToLunar: () => ({
     year: 2026,
@@ -55,7 +53,7 @@ vi.mock('@/lib/lunar', () => ({
     jieQi: '',
   }],
 }))
-describe('CalendarPage', () => {
+describe('ActivityCalendar', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-07-24T00:00:00Z'))
@@ -74,7 +72,7 @@ describe('CalendarPage', () => {
   afterEach(() => vi.useRealTimers())
 
   it('uses a full date accessible name and hides create controls from normal users', () => {
-    render(<CalendarPage />)
+    render(<ActivityCalendar />)
     const dayButton = screen.getByRole('button', { name: '2026年7月1日，農曆五月十七' })
     expect(dayButton).toBeVisible()
     expect(dayButton).toHaveClass('min-w-11')
@@ -85,7 +83,7 @@ describe('CalendarPage', () => {
   })
 
   it('requests an inclusive UTC end-of-day for the final visible week day', () => {
-    render(<CalendarPage />)
+    render(<ActivityCalendar />)
 
     expect(hookState.range).toHaveBeenCalledWith(
       '2026-06-28T00:00:00.000Z',
@@ -205,7 +203,7 @@ describe('CalendarPage', () => {
     }]
     useAuthStore.setState({ isAdmin: true })
 
-    render(<CalendarPage />)
+    render(<ActivityCalendar />)
     fireEvent.click(screen.getByRole('button', { name: '編輯事件：中秋聚會 occurrence' }))
     expect(await screen.findByDisplayValue('中秋聚會來源')).toBeVisible()
     fireEvent.click(screen.getByRole('button', { name: '儲存' }))
@@ -240,13 +238,13 @@ describe('CalendarPage', () => {
     hookState.events = [occurrence]
     hookState.detailLoading = true
     useAuthStore.setState({ isAdmin: true })
-    const { rerender } = render(<CalendarPage />)
+    const { rerender } = render(<ActivityCalendar />)
     fireEvent.click(screen.getByRole('button', { name: '編輯事件：待載入 occurrence' }))
     expect(screen.getByRole('status')).toHaveTextContent('載入來源事件中')
 
     hookState.detailLoading = false
     hookState.detailError = new Error('來源事件讀取失敗')
-    rerender(<CalendarPage />)
+    rerender(<ActivityCalendar />)
     expect(screen.getByRole('alert')).toHaveTextContent('無法載入來源事件')
     expect(screen.getByRole('button', { name: '重新載入' })).toBeVisible()
   })

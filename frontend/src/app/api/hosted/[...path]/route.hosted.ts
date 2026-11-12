@@ -9,7 +9,7 @@ interface RouteContext {
 async function handle(request: Request, context: RouteContext) {
   if (!isHostedMode) return portalResponse(404, '找不到功能')
   const config = getHostedConfig()
-  if (!config) return portalResponse(503, '精簡版尚未完成設定')
+  if (!config) return portalResponse(503, '入口網尚未完成設定')
 
   const { path } = await context.params
   const session = await createHostedGateway(config)

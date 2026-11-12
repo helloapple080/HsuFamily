@@ -18,12 +18,9 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import ConnectionStatus from '@/components/common/ConnectionStatus'
-import { useSignalR } from '@/hooks/useSignalR'
 import DemoModeBanner from '@/components/common/DemoModeBanner'
 import ThemeSwitcher from '@/components/theme/ThemeSwitcher'
 import { isDemoMode } from '@/lib/demo/config'
-import { isHostedMode } from '@/lib/hosted/mode'
 import type { ApiResponse } from '@/types/api'
 
 const navItems = [
@@ -42,7 +39,6 @@ export default function PortalLayout({ children }: PortalLayoutProps) {
   const pathname = usePathname()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const { user, isAuthenticated, isAdmin, isHydrated, logout } = useAuthStore()
-  const { status: signalRStatus, reconnect: reconnectSignalR } = useSignalR()
 
   useEffect(() => {
     if (!isDemoMode && isHydrated && !isAuthenticated) router.replace('/login')
@@ -57,14 +53,11 @@ export default function PortalLayout({ children }: PortalLayoutProps) {
 
     let revoked = true
     try {
-      const { data } = await api.post<ApiResponse<boolean>>('/api/auth/logout')
-      if (isHostedMode) revoked = data.data === true
+      const { data } = await api.post<ApiResponse<boolean>>('/api/hosted/auth/logout')
+      revoked = data.data === true
     } catch {
-      if (isHostedMode) {
-        toast.error('目前無法登出，請稍後再試')
-        return
-      }
-      // 後端失敗不應阻止清除本機的非敏感登入狀態。
+      toast.error('目前無法登出，請稍後再試')
+      return
     }
     logout()
     if (revoked) toast.success('已登出')
@@ -183,7 +176,6 @@ export default function PortalLayout({ children }: PortalLayoutProps) {
       <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 pt-16 md:ml-64 md:pt-0">
         <div className="space-y-4 p-4 sm:p-6 lg:p-8">
           {isDemoMode && <DemoModeBanner />}
-          {!isHostedMode && <ConnectionStatus status={signalRStatus} reconnect={reconnectSignalR} />}
           {children}
         </div>
       </main>

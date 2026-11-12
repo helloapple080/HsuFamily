@@ -64,7 +64,7 @@ export default function Providers({ children }: ProvidersProps) {
 
     const initialUser = useAuthStore.getState().user
     const sessionUnchanged = () => !isHostedMode || useAuthStore.getState().user === initialUser
-    api.get<ApiResponse<UserInfo>>('/api/auth/me')
+    api.get<ApiResponse<UserInfo>>('/api/hosted/auth/me')
       .then(({ data }) => {
         if (isMounted && sessionUnchanged() && data.success && data.data) login(data.data)
       })

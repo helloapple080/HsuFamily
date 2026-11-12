@@ -1,35 +1,15 @@
 ---
-description: 啟動本地開發環境（後端 + 前端 + MongoDB）
+description: 啟動 Next.js 與 Supabase 測試環境
 ---
 
 # 啟動開發環境
 
-## 前置條件
-- .NET 10 SDK 已安裝
-- Node.js 22+ 與 pnpm 已安裝
-- MongoDB 已啟動
+使用 Node.js 22、pnpm 10.33 和隔離的 Supabase 測試專案。依 [部署手冊](../../docs/guides/developer.md) 套用遷移並設定 `frontend/.env.local`。
 
-## 步驟
-
-// turbo
-1. 確認 .NET 環境
-```bash
-export DOTNET_ROOT="/opt/homebrew/opt/dotnet/libexec" && dotnet --version
+```sh
+cd frontend
+pnpm install --frozen-lockfile --ignore-scripts
+pnpm dev
 ```
 
-// turbo
-2. 啟動後端 API（背景執行）
-```bash
-cd backend && export DOTNET_ROOT="/opt/homebrew/opt/dotnet/libexec" && dotnet run --project FamilyPortal.Api
-```
-> API 會自動建立 MongoDB 索引與預設 Admin 帳號
-
-// turbo
-3. 啟動前端（另一個終端）
-```bash
-cd frontend && pnpm dev
-```
-
-4. 驗證
-- 後端: 瀏覽 `https://localhost:5001/api/auth/me`（應返回 401）
-- 前端: 瀏覽 `http://localhost:3000`
+開啟 `http://localhost:3000`。已設定時，未登入的 `/api/hosted/auth/me` 應回 401；未設定時應回 503。不可連向正式資料庫進行開發。

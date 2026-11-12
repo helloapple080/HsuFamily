@@ -1,7 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { endOfMonth, endOfWeek, format, startOfMonth, startOfWeek } from 'date-fns'
 import { CalendarDays, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -10,7 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import AdminOnly from '@/components/common/AdminOnly'
 import { EventDialog } from '@/components/features/calendar/EventDialog'
 import { useCalendarEvents } from '@/hooks/useCalendarEvents'
-import { useSignalR } from '@/hooks/useSignalR'
 import { getMonthLunarInfo } from '@/lib/lunar'
 import { useAuthStore } from '@/stores/authStore'
 
@@ -25,7 +23,7 @@ function utcDayEnd(date: Date): string {
   return `${format(date, 'yyyy-MM-dd')}T23:59:59.999Z`
 }
 
-export default function LegacyCalendar() {
+export default function ActivityCalendar() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const isAdmin = useAuthStore((state) => state.isAdmin)
@@ -36,18 +34,6 @@ export default function LegacyCalendar() {
   const queryStart = utcDayStart(startOfWeek(startOfMonth(currentDate)))
   const queryEnd = utcDayEnd(endOfWeek(endOfMonth(currentDate)))
   const { data: events = [], isLoading, isError, refetch } = useCalendarEvents(queryStart, queryEnd)
-  const { on } = useSignalR()
-  const queryClient = useQueryClient()
-
-  useEffect(() => {
-    const invalidate = () => queryClient.invalidateQueries({ queryKey: ['events'] })
-    const unsubscribe = [
-      on('EventCreated', invalidate),
-      on('EventUpdated', invalidate),
-      on('EventDeleted', invalidate),
-    ]
-    return () => unsubscribe.forEach((callback) => callback?.())
-  }, [on, queryClient])
 
   return (
     <div className="space-y-6">

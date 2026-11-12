@@ -1,7 +1,6 @@
 import type { NextConfig } from "next";
 
 const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
-const isHostedMode = !isDemoMode && process.env.NEXT_PUBLIC_PORTAL_MODE === "supabase";
 
 const nextConfig: NextConfig = isDemoMode
   ? {
@@ -10,13 +9,13 @@ const nextConfig: NextConfig = isDemoMode
       basePath: "/HsuFamily",
       trailingSlash: true,
       images: { unoptimized: true },
+      typescript: { tsconfigPath: "tsconfig.pages.json" },
     }
   : {
       poweredByHeader: false,
       output: "standalone",
-      ...(isHostedMode && {
-        pageExtensions: ["hosted.ts", "tsx", "ts", "jsx", "js"],
-      }),
+      // 公開靜態展示的設定不註冊 .hosted.ts 私人路由。
+      pageExtensions: ["hosted.ts", "tsx", "ts", "jsx", "js"],
     };
 
 export default nextConfig;

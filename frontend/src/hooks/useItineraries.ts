@@ -26,7 +26,7 @@ export function useItineraries(query?: string) {
           .some((value) => value?.toLocaleLowerCase('zh-TW').includes(keyword)))
       }
       if (query?.trim()) {
-        const res = await api.get<ApiResponse<Itinerary[]>>('/api/itineraries/search', {
+        const res = await api.get<ApiResponse<Itinerary[]>>('/api/hosted/itineraries/search', {
           params: { keyword: query.trim(), limit: 50 },
         })
         if (!res.data.success) throw new Error(res.data.message)
@@ -34,7 +34,7 @@ export function useItineraries(query?: string) {
       }
 
       const { cursorDate, cursorId } = pageParam
-      const res = await api.get<ApiResponse<Itinerary[]>>('/api/itineraries', {
+      const res = await api.get<ApiResponse<Itinerary[]>>('/api/hosted/itineraries', {
         params: {
           query,
           cursorDate,
@@ -64,7 +64,7 @@ export function useCreateItinerary() {
   return useMutation({
     mutationFn: async (data: UpsertItineraryRequest) => {
       if (isDemoMode) return rejectDemoWrite()
-      const res = await api.post<ApiResponse<Itinerary>>('/api/itineraries', data)
+      const res = await api.post<ApiResponse<Itinerary>>('/api/hosted/itineraries', data)
       if (!res.data.success) throw new Error(res.data.message)
       return res.data.data
     },
@@ -81,7 +81,7 @@ export function useUpdateItinerary() {
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: UpsertItineraryRequest }) => {
       if (isDemoMode) return rejectDemoWrite()
-      const res = await api.put<ApiResponse<Itinerary>>(`/api/itineraries/${id}`, data)
+      const res = await api.put<ApiResponse<Itinerary>>(`/api/hosted/itineraries/${id}`, data)
       if (!res.data.success) throw new Error(res.data.message)
       return res.data.data
     },
@@ -98,7 +98,7 @@ export function useDeleteItinerary() {
   return useMutation({
     mutationFn: async (id: string) => {
       if (isDemoMode) return rejectDemoWrite()
-      const res = await api.delete<ApiResponse<null>>(`/api/itineraries/${id}`)
+      const res = await api.delete<ApiResponse<null>>(`/api/hosted/itineraries/${id}`)
       if (!res.data.success) throw new Error(res.data.message)
       return id
     },

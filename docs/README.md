@@ -2,7 +2,7 @@
 title: 許氏入口網文件中心
 aliases: [HsuFamily 文件中心, 許氏入口網知識庫]
 tags: [HsuFamily, documentation, Obsidian, governance]
-updated: 2026-07-24
+updated: 2026-11-12
 code_baseline: 57d1110
 ---
 
@@ -10,7 +10,7 @@ code_baseline: 57d1110
 
 ## 開發與使用手冊
 
-- 開發者：[Markdown](./guides/developer.md) · [HTML](./guides/developer.html)，含 Cloudflare Tunnel、驗收與備份。
+- 開發者：[Markdown](./guides/developer.md) · [HTML](./guides/developer.html)，含目前的 Next.js／Supabase 部署、驗收與備份。
 - 家人：[Markdown](./guides/user.md) · [HTML](./guides/user.html)，含登入、農曆行事曆及介面操作。
 
 ## 公開展示網站
@@ -18,18 +18,20 @@ code_baseline: 57d1110
 GitHub Pages 唯讀展示版：<https://helloapple080.github.io/HsuFamily/>
 
 - 所有姓名、聯絡方式、事件與行程皆為虛構 fixtures，不含 MongoDB 既有資料。
-- 展示版不呼叫 .NET API、不建立 SignalR 連線，也不處理登入、Cookie 或密碼。
+- 展示版不提供私人 API 或登入，也不處理登入 Cookie 或密碼。
 - 新增、修改與刪除只會顯示「公開展示模式不會儲存任何變更」，不會永久保存。
 - 每次 `main` 更新後由 `.github/workflows/pages.yml` 自動測試、靜態建置並部署。
-- 正式系統仍使用 Next.js standalone、.NET API、MongoDB 與 SignalR；Demo build 不會改變正式部署模式。
+- 私人入口網使用 Next.js、Supabase Auth、PostgreSQL 和私人 Storage；展示與私人建置彼此分開。
 
-## 基準結論
+## 歷史稽核：舊版基準結論
+
+以下基準、附件與簡報保留供歷史查閱，不代表現行 Supabase 環境已通過上線驗收。現行操作請以開發與使用手冊為準。
 
 截至程式碼基準 `57d1110`，本專案已具備**企業級工程思維**，且已知的程式碼 Critical／High 安全基線已完成修復與回歸驗證。這代表架構、安全、測試、供應鏈與部署設定已有可持續執行的閉環；不代表已取得正式生產環境、法遵或第三方資安認證。
 
 目前沒有仍開啟的程式碼 High／Critical release blocker。剩餘項目主要是正式 TLS／DNS／proxy、Secret Manager、監控告警、備份還原、RPO／RTO、事故演練、權限治理與獨立滲透測試等**環境及治理風險**。
 
-## 驗證快照
+## 歷史驗證快照
 
 | 項目 | 結果 |
 |---|---|
@@ -44,7 +46,7 @@ GitHub Pages 唯讀展示版：<https://helloapple080.github.io/HsuFamily/>
 
 > 測試通過與依賴掃描是程式碼證據；正式上線仍需完成 [部署與維運手冊](./04-部署與維運手冊.md) 的環境驗收。
 
-## 閱讀順序
+## 歷史文件閱讀順序
 
 1. [管理摘要](./01-管理摘要.md)－供長官快速決策。
 2. [系統與架構全覽](./02-系統與架構全覽.md)－技術與信任邊界。

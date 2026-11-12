@@ -1,9 +1,10 @@
 # Family Portal — Root .gitignore
 
 # 環境變數（禁止提交！）
-.env
-.env.local
-.env.production
+.env*
+!.env.example
+.vercel/
+supabase/.temp/
 
 # macOS
 .DS_Store
@@ -22,22 +23,9 @@ __MACOSX/
 .worktrees/
 .superpowers/
 
-# ─── 後端 ───
-backend/bin/
-backend/obj/
-backend/**/.vs/
-backend/**/bin/
-backend/**/obj/
-backend/**/*.user
-backend/TestResults/
-backend/**/TestResults/
-
 # ─── 前端 ───
 **/node_modules/
 frontend/.next/
 frontend/out/
 frontend/.turbo/
 frontend/coverage/
-
-# ─── Docker ───
-.env

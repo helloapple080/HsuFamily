@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, codex/supabase-portal]
   pull_request:
     branches: [main]
 
@@ -10,56 +10,6 @@ permissions:
   contents: read
 
 jobs:
-  backend:
-    name: Backend
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: 10.0.x
-
-      - name: Restore
-        working-directory: backend
-        run: dotnet restore FamilyPortal.slnx
-
-      - name: Audit NuGet dependencies
-        working-directory: backend
-        run: |
-          set -o pipefail
-          dotnet list FamilyPortal.slnx package --vulnerable --include-transitive 2>&1 | tee vulnerable-packages.txt
-          if grep -qE '^[[:space:]]*>[[:space:]]' vulnerable-packages.txt; then
-            exit 1
-          fi
-
-      - name: Build
-        working-directory: backend
-        run: dotnet build FamilyPortal.slnx --no-restore --configuration Release
-
-      - name: Test
-        working-directory: backend
-        run: >-
-          dotnet test
-          --project FamilyPortal.Security.Tests/FamilyPortal.Security.Tests.csproj
-          --no-build
-          --configuration Release
-          --minimum-expected-tests 150
-          --results-directory FamilyPortal.Security.Tests/TestResults
-          --coverlet
-          --coverlet-output-format cobertura
-
-      - name: Upload backend coverage
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-coverage-cobertura
-          path: backend/FamilyPortal.Security.Tests/TestResults/coverage.cobertura.*.xml
-          if-no-files-found: error
-          retention-days: 30
-
   frontend:
     name: Frontend
     runs-on: ubuntu-latest
@@ -90,17 +40,24 @@ jobs:
 
       - name: Test
         working-directory: frontend
-        run: pnpm test -- --run
+        run: pnpm test
 
       - name: Build
         working-directory: frontend
         run: pnpm build
 
-      - name: Build hosted preview
+      - name: Verify private API is registered
         working-directory: frontend
-        env:
-          NEXT_PUBLIC_PORTAL_MODE: supabase
-        run: pnpm build
+        run: |
+          node -e 'const routes = require("./.next/app-path-routes-manifest.json"); if (!Object.values(routes).includes("/api/hosted/[...path]")) process.exit(1)'
+
+      - name: Check CSP
+        working-directory: frontend
+        run: pnpm test:csp
+
+      - name: Build and verify static demo
+        working-directory: frontend
+        run: pnpm build:pages && pnpm test:pages
 
   supply-chain:
     name: Supply Chain

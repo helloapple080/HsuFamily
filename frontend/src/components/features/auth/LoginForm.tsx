@@ -14,7 +14,6 @@ import type { ApiResponse } from '@/types/api'
 import type { LoginResponse } from '@/types/auth'
 import { LoaderCircle } from 'lucide-react'
 import { isAxiosError } from 'axios'
-import { isHostedMode } from '@/lib/hosted/mode'
 
 export default function LoginForm() {
   const [username, setUsername] = useState('')
@@ -31,7 +30,7 @@ export default function LoginForm() {
 
     try {
       const { data } = await api.post<ApiResponse<LoginResponse>>(
-        '/api/auth/login',
+        '/api/hosted/auth/login',
         { username, password }
       )
 
@@ -45,7 +44,7 @@ export default function LoginForm() {
       }
     } catch (error) {
       const status = isAxiosError(error) ? error.response?.status : undefined
-      const message = !isHostedMode ? '帳號或密碼錯誤' : status === 401
+      const message = status === 401
         ? '無法登入，請確認信箱、密碼及家人資格'
         : '目前無法登入，請稍後再試'
       setErrorMessage(message)
@@ -102,17 +101,17 @@ export default function LoginForm() {
                 className="space-y-2"
               >
                 <Label htmlFor="username" className="text-sm font-medium">
-                  {isHostedMode ? '電子信箱' : '帳號'}
+                  電子信箱
                 </Label>
                 <Input
                   id="username"
-                  type={isHostedMode ? 'email' : 'text'}
+                  type="email"
                   autoComplete="username"
                   spellCheck={false}
                   maxLength={254}
                   aria-invalid={Boolean(errorMessage)}
                   aria-describedby={errorMessage ? 'login-error' : undefined}
-                  placeholder={isHostedMode ? '輸入管理員核准的信箱' : '輸入帳號或信箱'}
+                  placeholder="輸入管理員核准的信箱"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   required

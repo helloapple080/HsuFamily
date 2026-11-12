@@ -1,33 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-function getApiConnectionSources(apiUrl: string | undefined): string[] {
-  if (!apiUrl) {
-    return []
-  }
-
-  try {
-    const parsedApiUrl = new URL(apiUrl)
-    if (parsedApiUrl.protocol !== 'http:' && parsedApiUrl.protocol !== 'https:') {
-      return []
-    }
-
-    const websocketProtocol = parsedApiUrl.protocol === 'https:' ? 'wss:' : 'ws:'
-    return [parsedApiUrl.origin, `${websocketProtocol}//${parsedApiUrl.host}`]
-  } catch {
-    return []
-  }
-}
-
 export function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64')
   const isDevelopment = process.env.NODE_ENV === 'development'
-  const connectSources = ["'self'", ...getApiConnectionSources(process.env.NEXT_PUBLIC_API_URL)]
   const contentSecurityPolicy = `
     default-src 'self';
     script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDevelopment ? " 'unsafe-eval'" : ''};
     style-src 'self' 'nonce-${nonce}'${isDevelopment ? " 'unsafe-inline'" : ''};
     style-src-attr 'unsafe-inline';
-    connect-src ${connectSources.join(' ')};
+    connect-src 'self';
     img-src 'self' blob: data:;
     font-src 'self';
     object-src 'none';

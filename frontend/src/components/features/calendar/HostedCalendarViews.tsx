@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import HostedCalendar from './HostedCalendar'
-import LegacyCalendar from './LegacyCalendar'
+import ActivityCalendar from './ActivityCalendar'
 
 export default function HostedCalendarViews() {
   const [view, setView] = useState<'worship' | 'month'>('worship')
@@ -15,7 +15,7 @@ export default function HostedCalendarViews() {
         <Button type="button" className="h-11" variant={view === 'month' ? 'default' : 'outline'}
           aria-pressed={view === 'month'} onClick={() => setView('month')}>活動月曆</Button>
       </div>
-      {view === 'worship' ? <HostedCalendar /> : <LegacyCalendar />}
+      {view === 'worship' ? <HostedCalendar /> : <ActivityCalendar />}
     </div>
   )
 }

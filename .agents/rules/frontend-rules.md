@@ -6,7 +6,7 @@ description: Next.js 16 前端開發規範 — 適用於 App Router + TypeScript
 
 ## Next.js 16 特有規則
 - 預設使用 Server Components，僅在需要交互時加 `'use client'`
-- 使用 `use cache` 指令進行顯式快取控制（取代舊版 ISR）
+- 私人回應不得使用共用快取；只有不含身分及私密資料的內容可考慮靜態或共用快取
 - 路由使用 App Router（`app/` 目錄），不使用 Pages Router
 - 閱讀 `node_modules/next/dist/docs/` 中的最新文件再開始開發
 
@@ -43,7 +43,7 @@ components/
 - 元素應有足夠的 `aria-label` 與語義化 HTML
 
 ## 安全規範
-- API Base URL 使用環境變數 `NEXT_PUBLIC_API_URL`
-- JWT Token 存於 httpOnly cookie 或 Zustand（不用 localStorage）
+- 只呼叫同源 `/api/hosted`，瀏覽器只以 HttpOnly Cookie 傳送會話
+- Zustand 不儲存 Token，只存頁面所需的登入狀態；禁止將憑證寫到 localStorage
 - 禁止 `dangerouslySetInnerHTML`
 - 所有使用者輸入在後端也要驗證

@@ -28,7 +28,8 @@ describe('Supabase SDK 與登入 Cookie', () => {
 
   beforeEach(() => {
     vi.resetModules()
-    vi.stubEnv('NEXT_PUBLIC_PORTAL_MODE', 'supabase')
+    vi.stubEnv('NEXT_PUBLIC_PORTAL_MODE', undefined)
+    vi.stubEnv('NEXT_PUBLIC_DEMO_MODE', undefined)
     vi.stubEnv('PORTAL_ORIGIN', origin)
     vi.stubEnv('SUPABASE_URL', 'https://auth.example.test')
     vi.stubEnv('SUPABASE_PUBLISHABLE_KEY', 'sb_publishable_testing')
@@ -103,6 +104,17 @@ describe('Supabase SDK 與登入 Cookie', () => {
   }
 
   const login = () => call('auth/login', 'POST', { username: email, password: 'test-only' })
+
+  it('展示模式即使有正式環境變數也不開放私人路由', async () => {
+    vi.stubEnv('NEXT_PUBLIC_DEMO_MODE', 'true')
+    expect((await login()).status).toBe(404)
+    expect(jar.size).toBe(0)
+  })
+
+  it('預設私人模式缺少雲端設定時拒絕服務，不回退到舊 API', async () => {
+    vi.stubEnv('SUPABASE_URL', undefined)
+    expect((await login()).status).toBe(503)
+  })
 
   it('登入後用 Cookie 還原身分；角色異動立即生效，登出刪除憑證', async () => {
     const response = await login()

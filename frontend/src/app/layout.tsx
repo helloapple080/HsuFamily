@@ -10,8 +10,8 @@ export const metadata: Metadata = {
     default: '許氏入口網 (Hsu Family Portal)',
     template: '%s | 許氏入口網',
   },
-  description: '企業級家庭專屬入口網站，整合農曆行事曆、拜拜提醒、即時同步更新。',
-  keywords: ['家庭', '行事曆', '農曆', '拜拜', '即時同步'],
+  description: '私人家庭入口網，整合農曆行事曆、拜拜日期、歷年行程與私人照片。',
+  keywords: ['家庭', '行事曆', '農曆', '拜拜'],
 }
 
 export default async function RootLayout({
