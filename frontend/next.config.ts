@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+const isHostedMode = !isDemoMode && process.env.NEXT_PUBLIC_PORTAL_MODE === "supabase";
 
 const nextConfig: NextConfig = isDemoMode
   ? {
@@ -13,6 +14,15 @@ const nextConfig: NextConfig = isDemoMode
   : {
       poweredByHeader: false,
       output: "standalone",
+      ...(isHostedMode && {
+        pageExtensions: ["hosted.ts", "tsx", "ts", "jsx", "js"],
+        async redirects() {
+          return [
+            { source: "/members", destination: "/calendar", permanent: false },
+            { source: "/itineraries", destination: "/calendar", permanent: false },
+          ];
+        },
+      }),
     };
 
 export default nextConfig;

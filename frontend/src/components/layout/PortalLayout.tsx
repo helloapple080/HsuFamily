@@ -23,12 +23,14 @@ import { useSignalR } from '@/hooks/useSignalR'
 import DemoModeBanner from '@/components/common/DemoModeBanner'
 import ThemeSwitcher from '@/components/theme/ThemeSwitcher'
 import { isDemoMode } from '@/lib/demo/config'
+import { isHostedMode } from '@/lib/hosted/mode'
+import type { ApiResponse } from '@/types/api'
 
 const navItems = [
   { href: '/calendar', label: '行事曆', icon: CalendarDays, description: '國農曆雙顯示' },
   { href: '/members', label: '家庭成員', icon: Users, description: '成員資料管理' },
   { href: '/itineraries', label: '歷年行程', icon: MapPinned, description: '行程紀錄查詢' },
-]
+].filter((item) => !isHostedMode || item.href === '/calendar')
 
 interface PortalLayoutProps {
   children: React.ReactNode
@@ -53,13 +55,20 @@ export default function PortalLayout({ children }: PortalLayoutProps) {
       return
     }
 
+    let revoked = true
     try {
-      await api.post('/api/auth/logout')
+      const { data } = await api.post<ApiResponse<boolean>>('/api/auth/logout')
+      if (isHostedMode) revoked = data.data === true
     } catch {
+      if (isHostedMode) {
+        toast.error('目前無法登出，請稍後再試')
+        return
+      }
       // 後端失敗不應阻止清除本機的非敏感登入狀態。
     }
     logout()
-    toast.success('已登出')
+    if (revoked) toast.success('已登出')
+    else toast.warning('此裝置已登出，但未能確認遠端會話撤銷')
     router.push('/login')
   }
 
@@ -174,7 +183,7 @@ export default function PortalLayout({ children }: PortalLayoutProps) {
       <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 pt-16 md:ml-64 md:pt-0">
         <div className="space-y-4 p-4 sm:p-6 lg:p-8">
           {isDemoMode && <DemoModeBanner />}
-          <ConnectionStatus status={signalRStatus} reconnect={reconnectSignalR} />
+          {!isHostedMode && <ConnectionStatus status={signalRStatus} reconnect={reconnectSignalR} />}
           {children}
         </div>
       </main>

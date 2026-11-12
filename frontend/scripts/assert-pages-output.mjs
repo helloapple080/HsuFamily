@@ -1,3 +1,5 @@
+import assert from 'node:assert/strict'
+import { existsSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -12,6 +14,7 @@ const requiredFiles = [
   '.nojekyll',
 ]
 const forbiddenPatterns = [/mongodb(?:\+srv)?:\/\//i, /Jwt__Secret/i]
+assert.ok(!existsSync(path.join(outputRoot, 'api')), '公開展示版不可產生私人 API')
 
 for (const relativePath of requiredFiles) {
   await readFile(path.join(outputRoot, relativePath))

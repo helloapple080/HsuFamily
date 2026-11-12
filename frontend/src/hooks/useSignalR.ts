@@ -6,6 +6,7 @@ import * as signalR from '@microsoft/signalr'
 import { apiBaseUrl } from '@/lib/api'
 import { useAuthStore } from '@/stores/authStore'
 import { isDemoMode } from '@/lib/demo/config'
+import { isHostedMode } from '@/lib/hosted/mode'
 
 export type SignalRStatus = 'demo' | 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected'
 
@@ -217,7 +218,7 @@ const demoSignalRClient: Pick<SharedSignalRClient, 'getStatus' | 'subscribeStatu
 /// 共用 SignalR 連線與事件訂閱，在重連後同步 React Query cache。
 export function useSignalR() {
   const queryClient = useQueryClient()
-  const signalRClient = isDemoMode ? demoSignalRClient : sharedSignalRClient
+  const signalRClient = isDemoMode || isHostedMode ? demoSignalRClient : sharedSignalRClient
   const status = useSyncExternalStore(
     signalRClient.subscribeStatus,
     signalRClient.getStatus,

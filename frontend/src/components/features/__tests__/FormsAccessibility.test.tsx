@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import LoginPage from '@/app/(auth)/login/page'
+import LoginForm from '@/components/features/auth/LoginForm'
 import { EventDialog } from '@/components/features/calendar/EventDialog'
 import { MemberDialog } from '@/components/features/members/MemberDialog'
 import { ItineraryDialog } from '@/components/features/itineraries/ItineraryDialog'
@@ -36,7 +36,7 @@ describe('accessible bounded forms', () => {
   })
 
   it('adds login autocomplete and backend-aligned input limits', () => {
-    render(<LoginPage />)
+    render(<LoginForm />)
     expect(screen.getByLabelText('帳號')).toHaveAttribute('autocomplete', 'username')
     expect(screen.getByLabelText('帳號')).toHaveAttribute('maxlength', '254')
     expect(screen.getByLabelText('密碼')).toHaveAttribute('autocomplete', 'current-password')

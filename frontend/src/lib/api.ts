@@ -1,5 +1,6 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/stores/authStore'
+import { isHostedMode } from '@/lib/hosted/mode'
 import type { ApiResponse } from '@/types/api'
 
 interface CsrfTokenResponse {
@@ -10,7 +11,7 @@ interface RetryableRequestConfig extends InternalAxiosRequestConfig {
   _retry?: boolean
 }
 
-export const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? ''
+export const apiBaseUrl = isHostedMode ? '' : (process.env.NEXT_PUBLIC_API_URL ?? '')
 const unsafeMethods = new Set(['post', 'put', 'patch', 'delete'])
 
 /// 不含攔截器的 Client，避免取得 CSRF Token 或 refresh 時遞迴。
@@ -99,6 +100,12 @@ const api = axios.create({
 })
 
 api.interceptors.request.use(async (config) => {
+  if (isHostedMode) {
+    if (config.url?.startsWith('/api/auth/')) {
+      config.url = config.url.replace('/api/auth/', '/api/hosted/auth/')
+    }
+    return config
+  }
   if (unsafeMethods.has(config.method?.toLowerCase() ?? '')) {
     config.headers.set('X-XSRF-TOKEN', await getCsrfToken())
   }
@@ -115,6 +122,13 @@ api.interceptors.response.use(
   },
   async (error: AxiosError) => {
     const originalRequest = error.config as RetryableRequestConfig | undefined
+    if (isHostedMode) {
+      // 登入頁自己處理登入失敗；資料請求 401 代表本機身分已失效。
+      if (error.response?.status === 401 && originalRequest?.url?.startsWith('/api/hosted/worship')) {
+        useAuthStore.getState().logout()
+      }
+      return Promise.reject(error)
+    }
     const isAuthRequest = originalRequest?.url?.startsWith('/api/auth/login') ||
       originalRequest?.url?.startsWith('/api/auth/refresh') ||
       originalRequest?.url?.startsWith('/api/auth/logout')
@@ -136,6 +150,8 @@ api.interceptors.response.use(
         invalidateCsrfToken()
         useAuthStore.getState().logout()
         if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+          // 舊版會話失效時刻意完整換頁，丟棄目前頁面的私人記憶體快取。
+          // eslint-disable-next-line @next/next/no-location-assign-relative-destination
           window.location.assign('/login')
         }
       }

@@ -12,6 +12,7 @@ import type { UserInfo } from '@/types/auth'
 import { shouldRetryQuery } from '@/lib/queryRetry'
 import { MotionConfig } from 'framer-motion'
 import { isDemoMode } from '@/lib/demo/config'
+import { isHostedMode } from '@/lib/hosted/mode'
 
 const demoUser: UserInfo = {
   id: 'demo-viewer',
@@ -42,6 +43,13 @@ export default function Providers({ children }: ProvidersProps) {
       })
   )
 
+  useEffect(() => {
+    if (!isHostedMode) return
+    return useAuthStore.subscribe((next, previous) => {
+      if (next.user?.id !== previous.user?.id || next.user?.role !== previous.user?.role) queryClient.clear()
+    })
+  }, [queryClient])
+
   /// 以 HttpOnly Cookie 還原登入狀態；瀏覽器端不保存任何 Token。
   useEffect(() => {
     let isMounted = true
@@ -54,12 +62,14 @@ export default function Providers({ children }: ProvidersProps) {
       }
     }
 
+    const initialUser = useAuthStore.getState().user
+    const sessionUnchanged = () => !isHostedMode || useAuthStore.getState().user === initialUser
     api.get<ApiResponse<UserInfo>>('/api/auth/me')
       .then(({ data }) => {
-        if (isMounted && data.success && data.data) login(data.data)
+        if (isMounted && sessionUnchanged() && data.success && data.data) login(data.data)
       })
       .catch(() => {
-        if (isMounted) logout()
+        if (isMounted && sessionUnchanged()) logout()
       })
       .finally(() => {
         if (isMounted) setHydrated(true)

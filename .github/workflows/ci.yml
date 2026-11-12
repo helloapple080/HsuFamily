@@ -96,6 +96,12 @@ jobs:
         working-directory: frontend
         run: pnpm build
 
+      - name: Build hosted preview
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_PORTAL_MODE: supabase
+        run: pnpm build
+
   supply-chain:
     name: Supply Chain
     runs-on: ubuntu-latest

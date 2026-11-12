@@ -4,11 +4,35 @@
 
 ## 精簡版開發分支
 
-`codex/supabase-portal` 正在把網站整合成一個 Next.js 部署，並由 Supabase 提供登入、PostgreSQL 和私人照片空間。現階段只有資料層、權限和農曆規則底層；以下原版的 Docker 部署說明仍適用，尚不能以本分支替換正式站。
+`codex/supabase-portal` 的精簡版已接通登入、家人角色和農曆拜拜規則。它只需要部署一個 Next.js 應用程式，由 Supabase 管理登入和 PostgreSQL，不必運行 .NET 或 MongoDB。家庭成員、歷年行程、私人照片頁面和資料遷移尚未接入。以下原版的 Docker 部署說明仍適用；此預覽版不能替換正式站。
 
-- `supabase/migrations/202611110001_portal_foundation.sql` 包含角色名單、農曆規則與私人儲存政策。一般帳號不得自授權，且未核准或被撤權的帳號不可讀取。照片桶尚未開放上傳，待伺服器檔案驗證及附件關聯完成。
-- 在 `frontend` 執行 `pnpm test src/lib/hosted`，用嵌入式 PostgreSQL 執行遷移和角色測試。測試模擬 Supabase 身分與儲存資料表，不代表已驗證託管 Supabase 的 Auth 或 Storage API。
-- 只在隔離的 Supabase 測試專案套用遷移，使用假資料驗收。不得把正式資料匯入預覽環境。匯入前先備份現有 MongoDB，並核對重複週期、角色和照片關聯；密碼不隨資料遷移。下一階段接上 Next.js 的登入及行事曆，保留公開展示版。
+### 啟動隔離預覽
+
+1. 建立獨立的 Supabase 測試專案，只使用虛構資料。透過 SQL Editor 套用 `supabase/migrations/202611110001_portal_foundation.sql`。不要在不明確的專案執行遷移。
+2. 關閉公開註冊，透過 Supabase Dashboard 的 Authentication 建立兩個測試帳號，確認信箱狀態。用各自的 Auth UUID 在 SQL Editor 授權（下例 UUID 必須換成該專案的測試帳號 UUID）：
+
+```sql
+insert into public.portal_access (user_id, role) values
+  ('<測試管理員 UUID>', 'Admin'),
+  ('<測試家人 UUID>', 'User');
+```
+
+3. 本機在 `frontend/.env.local` 設定下列變數後執行 `pnpm dev`。雲端預覽把建置根目錄設為 `frontend`，使用固定的 HTTPS 預覽網址作為 `PORTAL_ORIGIN`，不要加結尾斜線。只使用 Supabase 的 Publishable key，不能使用 service-role 或 secret key。
+
+```dotenv
+NEXT_PUBLIC_PORTAL_MODE=supabase
+PORTAL_ORIGIN=http://localhost:3000
+SUPABASE_URL=https://YOUR-TEST-PROJECT.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_REPLACE_ME
+```
+
+4. 以管理員新增每年農曆八月十五、切換 2026 和 2036、編輯和刪除。一般家人應能讀取，直接呼叫寫入 API 應回 403；未登入、未核准或移除角色的帳號應回 401。登出後重整也應回登入頁。跨站寫入應回 403。HTTPS 登入時檢查 Cookie 有 HttpOnly、Secure、SameSite=Strict，私人 API 回應有 `Cache-Control: private, no-store`。
+
+登入和規則 API 使用同源 `/api/hosted`，伺服器驗證身分、查詢最新的家人角色並驗證輸入；資料庫仍以 RLS 限制讀寫。不要在 CDN 對私人 API 啟用快取。公開展示版優先採用靜態輸出，不包含私人 API；不設 `NEXT_PUBLIC_PORTAL_MODE` 則保留舊版 API。
+
+在 `frontend` 執行 `pnpm test`、`pnpm lint`、`pnpm audit:prod`、`NEXT_PUBLIC_PORTAL_MODE=supabase pnpm build`，另執行 `pnpm build:pages` 和 `pnpm test:pages`。RLS 測試使用嵌入式 PostgreSQL；登入測試用真實 SDK 搭配模擬的 Auth 服務，涵蓋 Cookie、撤權及遠端故障時的本機登出。這些測試不能取代託管 Auth 驗收。
+
+正式上線前，先補齊功能與安全驗收，演練備份／還原及回復舊版。匯入前備份現有 MongoDB，核對角色、重複週期與照片關聯；密碼不遷移，正式資料不進預覽環境。
 
 ## 1. 架構與成本
 
