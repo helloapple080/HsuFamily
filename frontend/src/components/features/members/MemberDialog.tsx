@@ -19,6 +19,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useCreateMember, useUpdateMember } from '@/hooks/useMembers'
 import { formatLunarDate } from '@/lib/lunar'
 import { isHostedMode } from '@/lib/hosted/mode'
+import { isVersionConflict, versionConflictMessage } from '@/lib/recordVersion'
 import type { Member, UpsertMemberRequest } from '@/types/member'
 
 export const memberSchema = z.object({
@@ -69,39 +70,52 @@ export function buildMemberPayload(data: MemberFormValues, member?: Member): Ups
   }
 }
 
+function memberFormDefaults(member?: Member): MemberFormValues {
+  return {
+    name: member?.name || '', title: member?.title || '', bloodType: member?.bloodType || '', bio: member?.bio || '',
+    birthday: member?.birthday ? member.birthday.split('T')[0] : '', lunarBirthdayMonth: member?.lunarBirthday?.month || null,
+    lunarBirthdayDay: member?.lunarBirthday?.day || null, isLunarLeapMonth: member?.lunarBirthday?.isLeapMonth || false,
+    isActive: member?.isActive ?? true,
+  }
+}
+
 export function MemberDialog({ member, children }: MemberDialogProps) {
   const [open, setOpen] = useState(false)
+  const [original, setOriginal] = useState<Member>()
   const [formError, setFormError] = useState<string | null>(null)
   const createMutation = useCreateMember()
   const updateMutation = useUpdateMember()
   const isPending = createMutation.isPending || updateMutation.isPending
   const { register, handleSubmit, reset, formState: { errors } } = useForm<MemberFormValues>({
     resolver: zodResolver(memberSchema),
-    defaultValues: {
-      name: member?.name || '', title: member?.title || '', bloodType: member?.bloodType || '', bio: member?.bio || '',
-      birthday: member?.birthday ? member.birthday.split('T')[0] : '', lunarBirthdayMonth: member?.lunarBirthday?.month || null,
-      lunarBirthdayDay: member?.lunarBirthday?.day || null, isLunarLeapMonth: member?.lunarBirthday?.isLeapMonth || false,
-      isActive: member?.isActive ?? true,
-    },
+    defaultValues: memberFormDefaults(member),
   })
 
   const onSubmit = async (data: MemberFormValues) => {
     setFormError(null)
-    const payload = buildMemberPayload(data, member)
+    const payload = buildMemberPayload(data, original)
     try {
-      if (member) await updateMutation.mutateAsync({ id: member.id, data: payload })
+      if (original) await updateMutation.mutateAsync({ id: original.id, version: original.version, data: payload })
       else await createMutation.mutateAsync(payload)
       setOpen(false)
-      if (!member) reset()
     } catch (error: unknown) {
-      setFormError(error instanceof Error && error.message ? error.message : '無法儲存成員資料，請稍後再試。')
+      setFormError(isVersionConflict(error) ? versionConflictMessage
+        : error instanceof Error && error.message ? error.message : '無法儲存成員資料，請稍後再試。')
     }
   }
 
   const nullableNumber = { setValueAs: (value: string | null | undefined) => value == null || value === '' ? null : Number(value) }
 
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => { if (!isPending) { setOpen(nextOpen); if (!nextOpen) setFormError(null) } }}>
+    <Dialog open={open} onOpenChange={(nextOpen) => {
+      if (isPending) return
+      if (nextOpen) {
+        setOriginal(member)
+        reset(memberFormDefaults(member))
+      }
+      setFormError(null)
+      setOpen(nextOpen)
+    }}>
       <DialogTrigger render={children} />
       <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto glass-panel-strong sm:max-w-[475px]">
         <DialogHeader>

@@ -28,7 +28,8 @@ export default function PrivatePhotos({ kind, id, title }: PrivatePhotosProps) {
   const pending = upload.isPending || remove.isPending
   const slots = list.data ?? []
   const capacity = maxPhotoSlots(kind)
-  const available = Array.from({ length: capacity }, (_, index) => index + 1).find((slot) => !slots.includes(slot))
+  const available = Array.from({ length: capacity }, (_, index) => index + 1)
+    .find((slot) => !slots.some((photo) => photo.slot === slot))
   const noun = kind === 'members' ? '頭像' : '照片'
 
   async function uploadFile(file?: File) {
@@ -50,14 +51,16 @@ export default function PrivatePhotos({ kind, id, title }: PrivatePhotosProps) {
     }
   }
 
-  async function removePhoto(slot: number) {
+  async function removePhoto(slot: number, revision?: string) {
     if (pending || !window.confirm(`確定移除「${title}」的${noun}？`)) return
     setNotice(null)
     try {
-      await remove.mutateAsync(slot)
+      await remove.mutateAsync({ slot, revision })
       setNotice({ text: '照片已移除' })
-    } catch {
-      setNotice({ text: '無法移除照片，請稍後再試。', error: true })
+    } catch (error) {
+      const conflict = isAxiosError(error) && error.response?.status === 409
+      if (conflict) void list.refetch()
+      setNotice({ text: conflict ? '照片已由其他人更新，請確認目前顯示的照片。' : '無法移除照片，請稍後再試。', error: true })
     }
   }
 
@@ -75,12 +78,12 @@ export default function PrivatePhotos({ kind, id, title }: PrivatePhotosProps) {
           <>
             {slots.length === 0 ? <p className="text-sm text-muted-foreground">這筆紀錄還沒有{noun}。</p> : (
               <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {slots.map((slot) => <li key={slot} className="space-y-1">
+                {slots.map(({ slot, revision }) => <li key={slot} className="space-y-1">
                   {/* 維持同源會話；不能使用 Next 圖片代理轉送私人圖片。 */}
-                  <Image unoptimized src={`${base}/${slot}?v=${list.dataUpdatedAt}`} alt={`${title}的${noun} ${slot}`}
+                  <Image unoptimized src={`${base}/${slot}${revision ? `?v=${revision}` : ''}`} alt={`${title}的${noun} ${slot}`}
                     width={320} height={240} className="max-h-56 w-full rounded-md bg-muted object-contain" />
                   {isAdmin && <Button type="button" variant="ghost" className="h-11" disabled={pending}
-                    aria-label={`移除${noun} ${slot}`} onClick={() => void removePhoto(slot)}>
+                    aria-label={`移除${noun} ${slot}`} onClick={() => void removePhoto(slot, revision)}>
                     <Trash2 aria-hidden="true" />移除
                   </Button>}
                 </li>)}

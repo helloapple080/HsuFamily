@@ -9,13 +9,14 @@ import axios from 'axios'
 import { isDemoMode } from '@/lib/demo/config'
 import { demoMembers } from '@/lib/demo/fixtures'
 import { rejectDemoWrite } from '@/lib/demo/actions'
+import { isVersionConflict, versionConflictMessage, versionHeaders, type RecordVersion } from '@/lib/recordVersion'
 
 export function useMembers() {
   return useQuery({
     queryKey: ['members'],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (isDemoMode) return [...demoMembers]
-      const res = await api.get<ApiResponse<Member[]>>('/api/hosted/members')
+      const res = await api.get<ApiResponse<Member[]>>('/api/hosted/members', { signal })
       if (!res.data.success) throw new Error(res.data.message)
       return res.data.data ?? []
     },
@@ -50,9 +51,9 @@ export function useUpdateMember() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: UpsertMemberRequest }) => {
+    mutationFn: async ({ id, data, version }: RecordVersion & { data: UpsertMemberRequest }) => {
       if (isDemoMode) return rejectDemoWrite()
-      const res = await api.put<ApiResponse<Member>>(`/api/hosted/members/${id}`, data)
+      const res = await api.put<ApiResponse<Member>>(`/api/hosted/members/${id}`, data, versionHeaders(version))
       if (!res.data.success) throw new Error(res.data.message)
       return res.data.data
     },
@@ -61,6 +62,7 @@ export function useUpdateMember() {
       toast.success('成員已更新')
     },
     onError: (error) => {
+      if (isVersionConflict(error)) return
       if (axios.isAxiosError(error)) {
         toast.error(error.response?.data?.message || '更新失敗')
       } else {
@@ -74,9 +76,10 @@ export function useDeleteMember() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (record: string | RecordVersion) => {
       if (isDemoMode) return rejectDemoWrite()
-      const res = await api.delete<ApiResponse<boolean>>(`/api/hosted/members/${id}`)
+      const { id, version } = typeof record === 'string' ? { id: record } : record
+      const res = await api.delete<ApiResponse<boolean>>(`/api/hosted/members/${id}`, versionHeaders(version))
       if (!res.data.success) throw new Error(res.data.message)
       return res.data.data
     },
@@ -85,6 +88,10 @@ export function useDeleteMember() {
       toast.success('成員已刪除')
     },
     onError: (error) => {
+      if (isVersionConflict(error)) {
+        toast.error(versionConflictMessage)
+        return
+      }
       if (axios.isAxiosError(error)) {
         toast.error(error.response?.data?.message || '刪除失敗')
       } else {

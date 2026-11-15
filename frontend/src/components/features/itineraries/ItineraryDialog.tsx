@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useCreateItinerary, useUpdateItinerary } from '@/hooks/useItineraries'
+import { isVersionConflict, versionConflictMessage } from '@/lib/recordVersion'
 import type { Itinerary, UpsertItineraryRequest } from '@/types/event'
 
 export const itinerarySchema = z.object({
@@ -33,18 +34,23 @@ interface ItineraryDialogProps {
   children: React.ReactElement
 }
 
+function itineraryFormDefaults(itinerary?: Itinerary): ItineraryFormValues {
+  return {
+    title: itinerary?.title || '', date: itinerary?.date ? itinerary.date.split('T')[0] : '',
+    location: itinerary?.location || '', description: itinerary?.description || '',
+  }
+}
+
 export function ItineraryDialog({ itinerary, children }: ItineraryDialogProps) {
   const [open, setOpen] = useState(false)
+  const [original, setOriginal] = useState<Itinerary>()
   const [formError, setFormError] = useState<string | null>(null)
   const createMutation = useCreateItinerary()
   const updateMutation = useUpdateItinerary()
   const isPending = createMutation.isPending || updateMutation.isPending
   const { register, handleSubmit, reset, formState: { errors } } = useForm<ItineraryFormValues>({
     resolver: zodResolver(itinerarySchema),
-    defaultValues: {
-      title: itinerary?.title || '', date: itinerary?.date ? itinerary.date.split('T')[0] : '',
-      location: itinerary?.location || '', description: itinerary?.description || '',
-    },
+    defaultValues: itineraryFormDefaults(itinerary),
   })
 
   const onSubmit = async (data: ItineraryFormValues) => {
@@ -54,25 +60,33 @@ export function ItineraryDialog({ itinerary, children }: ItineraryDialogProps) {
       date: new Date(`${data.date}T00:00:00.000Z`).toISOString(),
       location: data.location,
       description: data.description,
-      tags: itinerary?.tags || [],
-      participants: itinerary?.participants || [],
-      photos: itinerary?.photos || [],
-      endDate: itinerary?.endDate,
-      notes: itinerary?.notes,
-      linkedEventId: itinerary?.linkedEventId,
+      tags: original?.tags || [],
+      participants: original?.participants || [],
+      photos: original?.photos || [],
+      endDate: original?.endDate,
+      notes: original?.notes,
+      linkedEventId: original?.linkedEventId,
     }
     try {
-      if (itinerary) await updateMutation.mutateAsync({ id: itinerary.id, data: payload })
+      if (original) await updateMutation.mutateAsync({ id: original.id, version: original.version, data: payload })
       else await createMutation.mutateAsync(payload)
       setOpen(false)
-      if (!itinerary) reset()
     } catch (error: unknown) {
-      setFormError(error instanceof Error && error.message ? error.message : '無法儲存行程，請稍後再試。')
+      setFormError(isVersionConflict(error) ? versionConflictMessage
+        : error instanceof Error && error.message ? error.message : '無法儲存行程，請稍後再試。')
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => { if (!isPending) { setOpen(nextOpen); if (!nextOpen) setFormError(null) } }}>
+    <Dialog open={open} onOpenChange={(nextOpen) => {
+      if (isPending) return
+      if (nextOpen) {
+        setOriginal(itinerary)
+        reset(itineraryFormDefaults(itinerary))
+      }
+      setFormError(null)
+      setOpen(nextOpen)
+    }}>
       <DialogTrigger render={children} />
       <DialogContent className="glass-panel-strong sm:max-w-[425px]">
         <DialogHeader>

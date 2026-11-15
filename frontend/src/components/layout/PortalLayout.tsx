@@ -31,20 +31,25 @@ const navItems = [
 
 interface PortalLayoutProps {
   children: React.ReactNode
+  onAccessLogout?: () => void
 }
 
 /// 入口網的客戶端導覽外殼，處理認證導向與行動版選單。
-export default function PortalLayout({ children }: PortalLayoutProps) {
+export default function PortalLayout({ children, onAccessLogout }: PortalLayoutProps) {
   const router = useRouter()
   const pathname = usePathname()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const { user, isAuthenticated, isAdmin, isHydrated, logout } = useAuthStore()
 
   useEffect(() => {
-    if (!isDemoMode && isHydrated && !isAuthenticated) router.replace('/login')
-  }, [isAuthenticated, isHydrated, router])
+    if (!onAccessLogout && !isDemoMode && isHydrated && !isAuthenticated) router.replace('/login')
+  }, [isAuthenticated, isHydrated, onAccessLogout, router])
 
   const handleLogout = async () => {
+    if (onAccessLogout) {
+      onAccessLogout()
+      return
+    }
     if (isDemoMode) {
       toast.info('公開展示模式不需要登入或登出')
       router.push('/calendar')

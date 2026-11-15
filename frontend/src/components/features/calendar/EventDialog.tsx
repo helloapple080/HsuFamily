@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useCalendarEvent, useCreateEvent, useUpdateEvent } from '@/hooks/useCalendarEvents'
 import { solarToLunar } from '@/lib/lunar'
+import { isVersionConflict, versionConflictMessage } from '@/lib/recordVersion'
 import type { CalendarEvent, RecurrenceRule, UpsertEventRequest } from '@/types/event'
 
 export const eventSchema = z.object({
@@ -65,7 +66,7 @@ interface EventFormProps {
   defaultDate?: Date
   isPending: boolean
   onCancel: () => void
-  onSave: (payload: UpsertEventRequest) => Promise<void>
+  onSave: (payload: UpsertEventRequest, original?: CalendarEvent) => Promise<void>
 }
 
 function formatLocalDateInput(date: Date): string {
@@ -133,7 +134,9 @@ function gregorianRecurrenceLabel(rule: RecurrenceRule): string {
   return `此事件使用${recurrence}${interval}；目前僅能檢視並保留此設定。`
 }
 
-function EventForm({ event, defaultDate, isPending, onCancel, onSave }: EventFormProps) {
+function EventForm({ event: currentEvent, defaultDate, isPending, onCancel, onSave }: EventFormProps) {
+  // 背景更新不能替換這份草稿所依據的原始資料。
+  const [event] = useState(currentEvent)
   const [formError, setFormError] = useState<string | null>(null)
   const gregorianRecurrence = gregorianRecurrenceFor(event)
   const { control, register, handleSubmit, reset, formState: { errors } } = useForm<EventFormValues>({
@@ -191,10 +194,11 @@ function EventForm({ event, defaultDate, isPending, onCancel, onSave }: EventFor
     }
 
     try {
-      await onSave(payload)
+      await onSave(payload, event)
       if (!event) reset()
     } catch (error: unknown) {
-      setFormError(error instanceof Error && error.message ? error.message : '無法儲存事件，請稍後再試。')
+      setFormError(isVersionConflict(error) ? versionConflictMessage
+        : error instanceof Error && error.message ? error.message : '無法儲存事件，請稍後再試。')
     }
   }
 
@@ -305,10 +309,10 @@ export function EventDialog({ event, children, defaultDate }: EventDialogProps) 
   const sourceRuleId = isOccurrence ? event.sourceRuleId : null
   const sourceQuery = useCalendarEvent(sourceRuleId, open && isOccurrence)
   const editableEvent = isOccurrence ? sourceQuery.data : event
-  const sourceFailed = isOccurrence && !sourceQuery.isLoading && (sourceQuery.isError || !editableEvent)
+  const sourceFailed = isOccurrence && !sourceQuery.isLoading && !editableEvent
 
-  const save = async (payload: UpsertEventRequest) => {
-    if (editableEvent) await updateMutation.mutateAsync({ id: editableEvent.id, data: payload })
+  const save = async (payload: UpsertEventRequest, original?: CalendarEvent) => {
+    if (original) await updateMutation.mutateAsync({ id: original.id, version: original.version, data: payload })
     else await createMutation.mutateAsync(payload)
     setOpen(false)
   }

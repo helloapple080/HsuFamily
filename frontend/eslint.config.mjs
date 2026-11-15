@@ -11,6 +11,8 @@ const eslintConfig = defineConfig([
     ".next/**",
     "out/**",
     "build/**",
+    "dist-spa/**",
+    ".wrangler/**",
     "next-env.d.ts",
     // 忽略 macOS 在外接磁碟建立的 AppleDouble metadata 檔案。
     "**/._*",

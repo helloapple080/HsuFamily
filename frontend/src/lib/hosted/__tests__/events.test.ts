@@ -1,5 +1,6 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest'
+import { LunarYear } from 'lunar-javascript'
+import { describe, expect, it, vi } from 'vitest'
 import type { CalendarEvent, RecurrenceRule } from '@/types/event'
 import { solarToLunar } from '@/lib/lunar'
 import { eventInput, eventQuery } from '../event-contract'
@@ -41,6 +42,17 @@ describe('精簡版事件驗證', () => {
 })
 
 describe('普通行事曆事件展開', () => {
+  it('農曆每年週期不為單月查詢載入無關歷史年份', () => {
+    const lunarDate = solarToLunar(2025, 6, 25)
+    const fromYear = vi.spyOn(LunarYear, 'fromYear')
+    const rule = template({ type: 'LunarYearly', interval: 1, leapMonthPolicy: 'Both' }, {
+      isLunarDate: true, startDate: '2025-06-25T00:00:00.000Z', lunarDate,
+    })
+    const events = expandCalendarEvent(rule, '2036-06-21T00:00:00.000Z', '2036-08-21T23:59:59.999Z')
+    expect(events.map((event) => event.startDate.slice(0, 10))).toEqual(['2036-06-24', '2036-07-23'])
+    expect(new Set(fromYear.mock.calls.map(([year]) => year))).toEqual(new Set([2035, 2036]))
+  })
+
   it('保留國曆每月事件的週期，略過不存在的日期，不重複顯示來源', () => {
     const rule = template({ type: 'Monthly', interval: 1, leapMonthPolicy: 'RegularOnly' })
     const events = expandCalendarEvent(rule, '2026-01-30T00:00:00.000Z', '2026-03-31T23:59:59.999Z')

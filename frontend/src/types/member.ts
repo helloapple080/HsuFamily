@@ -16,6 +16,7 @@ export interface ContactInfo {
 /// 家庭成員
 export interface Member {
   id: string
+  version?: number
   name: string
   title: string
   birthday: string

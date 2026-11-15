@@ -23,9 +23,63 @@
 
 <p><a href="user.html">切換至使用者手冊</a> · <a href="developer.html">瀏覽器版</a></p>
 
-<h2>私人入口網<span><a href="#label-E7-A7-81-E4-BA-BA-E5-85-A5-E5-8F-A3-E7-B6-B2">&para;</a> <a href="#top">&uarr;</a></span></h2>
+<h2>私人入口網：Cloudflare／React＋Vite<span><a href="#label-E7-A7-81-E4-BA-BA-E5-85-A5-E5-8F-A3-E7-B6-B2-EF-BC-9ACloudflare-EF-BC-8FReact-EF-BC-8BVite">&para;</a> <a href="#top">&uarr;</a></span></h2>
 
-<p>預設私人入口網包含家人登入、農曆拜拜規則、活動月曆、成員、行程搜尋與私人照片。只需部署 Next.js 應用程式及 Supabase。舊執行程式已移出工作分支，可由 Git 提交 <code>5e15500</code> 取回；這不影響既有部署或資料。在隔離雲端驗收、資料核對及還原演練前不可切換正式站。</p>
+<p>新入口網沿用 React 介面，部署到 <code>workers.dev</code> 可不買網域、不架家用主機。<code>frontend/spa</code> 組裝 React，<code>frontend/src/components/features</code>、<code>hooks</code> 和領域契約供兩個入口共享；<code>frontend/edge</code> 集中驗證 Access、同源及角色後，再存取 D1 和私人 R2。Cloudflare 沒有 PostgreSQL RLS：D1 只透過 Worker binding 存取，不對外公開。讀取與重新開啟頁面用共用資料；管理員編輯或刪除時用版本比對，防止兩人互蓋。這不是即時推播。</p>
+
+<h3>本機測試（不登入、不部署）<span><a href="#label-E6-9C-AC-E6-A9-9F-E6-B8-AC-E8-A9-A6-EF-BC-88-E4-B8-8D-E7-99-BB-E5-85-A5-E3-80-81-E4-B8-8D-E9-83-A8-E7-BD-B2-EF-BC-89">&para;</a> <a href="#top">&uarr;</a></span></h3>
+
+<pre>cd frontend
+pnpm install --frozen-lockfile --ignore-scripts
+pnpm lint
+pnpm test
+pnpm check:cloudflare
+pnpm exec wrangler d1 migrations apply DB --local
+pnpm dev:cloudflare</pre>
+
+<p><code>check:cloudflare</code> 只建置 Vite 和檢查 Worker 打包。開啟 Wrangler 顯示的本機網址可查看網頁殼；私人 API 無驗簽設定回 503。沒有可部署的測試身分／驗簽後門。登入和照片的真實服務行為還須雲端驗證；本機測試不構成上線許可。</p>
+
+<h3>建立隔離雲端驗收站<span><a href="#label-E5-BB-BA-E7-AB-8B-E9-9A-94-E9-9B-A2-E9-9B-B2-E7-AB-AF-E9-A9-97-E6-94-B6-E7-AB-99">&para;</a> <a href="#top">&uarr;</a></span></h3>
+<ol><li>
+<p>維運者先在 <code>frontend</code> 執行 <code>pnpm exec wrangler login</code> 完成瀏覽器授權，再用 <code>pnpm exec wrangler whoami</code> 核對帳戶。開啟 Cloudflare Zero Trust Free 與 R2 Standard，若介面要求升級或有額外費用先停。建立<strong>獨立</strong>測試 Worker、D1 資料庫及 R2 桶，命名例如 <code>hsu-family-staging</code>。桶的 Public Development URL（<code>r2.dev</code>）、公開網域通通關閉。正式和測試不得共用 D1、R2 或 Access audience。</p>
+</li><li>
+<p>在 <code>frontend</code> 複製 <code>wrangler.jsonc</code> 為受 Git 忽略的 <code>wrangler.staging.local.jsonc</code>。換成測試 Worker 名稱、D1 名稱、DB 網頁顯示的 UUID 與 R2 名稱；保留 <code>preview_urls: false</code>、<code>run_worker_first</code> 及 Images binding。第一次可用 <code>workers_dev: false</code> 和不設 <code>vars</code> 建立 Worker，不公開路由，API 仍拒絕。先執行本機驗證，再分別執行 <code>pnpm exec wrangler d1 migrations apply DB --remote --config wrangler.staging.local.jsonc</code>、<code>pnpm exec wrangler deploy --config wrangler.staging.local.jsonc</code>。核對終端目標是測試用資源；沒有 Access 前不放資料、不提供網址。</p>
+</li><li>
+<p>在 Workers dashboard 的 Access 頁啟用正式 URL 保護（此處是<strong>測試 Worker 的固定 URL</strong>），用 <a href="https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/one-time-pin/">Email one-time PIN</a> 和逐一核准的測試信箱，不開 <code>Everyone</code>、<code>Bypass</code> 或服務權杖。若須先啟用 <code>workers.dev</code> 才能完成 Access 設定，先保留 API 未設定。確認無痕瀏覽需要登入後，在<strong>測試設定檔</strong>設定 <code>workers_dev: true</code>、保留 <code>preview_urls: false</code>，加入以下 <code>vars</code>，以實際應用替換示範值，重新部署後再確認一次未登入無法存取。</p>
+</li></ol>
+
+<pre>&quot;vars&quot;: {
+  &quot;PORTAL_ORIGIN&quot;: &quot;https://hsu-family-staging.example.workers.dev&quot;,
+  &quot;ACCESS_ISSUER&quot;: &quot;https://example-team.cloudflareaccess.com&quot;,
+  &quot;ACCESS_AUDIENCE&quot;: &quot;在 Access 應用程式裡複製的 64 位十六進位 AUD&quot;
+}</pre>
+<ol><li>
+<p>在那個<strong>測試 D1</strong> 的 SQL Console 執行以下示意。UUID 使用 <code>crypto.randomUUID()</code> 產生，信箱改成兩個有權收登入碼的測試信箱、全小寫；Access 白名單也要含這兩個信箱。第一次成功存取會綁定 Access 身分。撤權把 <code>portal_access.active</code> 設為 <code>0</code> 並將信箱移出 Access 白名單；不要刪除有歷史紀錄的帳號。角色只由雲端維運者設定。</p>
+</li></ol>
+
+<pre>INSERT INTO portal_access (id, email, role)
+VALUES (&#39;&lt;管理員 UUID&gt;&#39;, &#39;admin@example.com&#39;, &#39;Admin&#39;),
+       (&#39;&lt;唯讀家人 UUID&gt;&#39;, &#39;reader@example.com&#39;, &#39;User&#39;);</pre>
+<ol><li>
+<p>使用兩個瀏覽器帳號及無痕模式驗收：無登入／未白名單、管理員、唯讀、撤權後開啟既有照片連結、同時修改舊版本、2026／2036 及閏月、手機與深淺主題。測合法 WebP、帶 EXIF/GPS 的 JPEG、假圖片、接近 2 MiB、讀取不快取、重新整理 <code>/members</code> 和 API <code>404</code> 不變網頁。檢查 Cloudflare Worker 指標中最重請求的 CPU 時間與 Images 轉檔是否可在該帳戶免費層工作；未通過不升級也不正式切換。</p>
+</li></ol>
+
+<h3>費用、備份與回復<span><a href="#label-E8-B2-BB-E7-94-A8-E3-80-81-E5-82-99-E4-BB-BD-E8-88-87-E5-9B-9E-E5-BE-A9">&para;</a> <a href="#top">&uarr;</a></span></h3>
+<ul><li>
+<p><a href="https://developers.cloudflare.com/workers/platform/limits/">Workers Free</a> 10 萬動態請求／天、單次 CPU 10 ms；<a href="https://www.cloudflare.com/plans/zero-trust-services/">Access</a> 免費最多 50 人；<a href="https://developers.cloudflare.com/d1/platform/pricing/">D1</a> 每天 500 萬列讀、10 萬列寫、帳戶總 5 GB（<a href="https://developers.cloudflare.com/d1/platform/limits/">單一資料庫 500 MB</a>）。同時使用受上述請求與資料庫額度限制，沒有另外的同步服務費。</p>
+</li><li>
+<p><a href="https://developers.cloudflare.com/r2/pricing/">R2 Standard</a> 每月 10 GB-month、100 萬次 A 類、1,000 萬次 B 類操作免費，超額可收費。這不是零費用硬上限；使用 70% 前就檢查，涵蓋同帳戶其他用途與測試環境。<a href="https://developers.cloudflare.com/images/pricing/">Images</a> 文件列出免費每月 5,000 個不同轉檔，舊版 <a href="https://developers.cloudflare.com/images/tutorials/optimize-user-uploaded-image/">R2 上傳教學</a> 對 binding 仍要求 Paid，必須在實際 Free 帳戶驗證；不能轉檔就拒絕上傳，不存原圖、不自動升級。</p>
+</li><li>
+<p><a href="https://developers.cloudflare.com/d1/best-practices/import-export-data/">D1 匯出</a> 可使用 <code>pnpm exec wrangler d1 export DB --remote --output &lt;備份檔路徑&gt; --config wrangler.staging.local.jsonc</code>；照片要用 R2 的私有 S3 工具獨立複製、做 SHA-256 清單，不能把 SQL 當成照片備份。停寫後取得一致備份，放在不同位置並加密。從空的隔離 D1／R2 演練還原、核對每筆圖片索引及內容再切換。D1／R2 無跨服務交易；部分失敗後先用管理介面重試，仍未恢復時停寫、比對私有索引與 R2 清單，備份並人工清理，勿直接刪可見圖片。</p>
+</li><li>
+<p>既有 PostgreSQL SQL 和 MongoDB 離線匯出不能直接套用 D1。搬移前先輸出唯讀備份並核對紀錄、時區、農曆與照片。此分支不會搬既有資料或登入密碼；正式搬移和實際還原需要單獨演練。只讓一個正式站接受寫入，回退先停止新站寫入並保留新站變更做對帳。</p>
+</li></ul>
+
+<p><a href="https://developers.cloudflare.com/workers/framework-guides/web-apps/react/">Cloudflare 官方 React／Vite</a> · <a href="https://developers.cloudflare.com/workers/configuration/cloudflare-access/">Workers Access 設定</a> · <a href="https://developers.cloudflare.com/workers/wrangler/configuration/">Wrangler 設定</a></p>
+
+<h2>保留的回退版本：Next.js／Supabase<span><a href="#label-E4-BF-9D-E7-95-99-E7-9A-84-E5-9B-9E-E9-80-80-E7-89-88-E6-9C-AC-EF-BC-9ANext.js-EF-BC-8FSupabase">&para;</a> <a href="#top">&uarr;</a></span></h2>
+
+<p>既有私人入口網包含家人登入、農曆拜拜規則、活動月曆、成員、行程搜尋與私人照片。回退只需原有 Next.js 應用程式及 Supabase。更早的執行程式已移出工作分支，可由 Git 提交 <code>5e15500</code> 取回；這不影響既有部署或資料。在隔離雲端驗收、資料核對及還原演練前不可切換正式站。</p>
 
 <p>私人家用可先用 Vercel Hobby 搭配 Supabase Free，不需買網域。Supabase Free 含 500 MB 資料庫與 1 GB 檔案空間，低活動約一週可能暫停。照片、流量與備份仍需管理，免費層不是可用性保證。<a href="https://vercel.com/docs/plans">Vercel 方案</a> · <a href="https://supabase.com/pricing">Supabase 費率</a></p>
 
@@ -68,7 +122,7 @@ on conflict (singleton) do update set secret = excluded.secret;</pre>
 
 <p>正式上線前保留原站與備份；若新站失敗，回到原站並保存新站變更以供對帳。不要讓兩站同時接受正式寫入。正式資料不進預覽環境。</p>
 
-<h2>正式環境檢查<span><a href="#label-E6-AD-A3-E5-BC-8F-E7-92-B0-E5-A2-83-E6-AA-A2-E6-9F-A5">&para;</a> <a href="#top">&uarr;</a></span></h2>
+<h2>Next.js 回退環境檢查<span><a href="#label-Next.js+-E5-9B-9E-E9-80-80-E7-92-B0-E5-A2-83-E6-AA-A2-E6-9F-A5">&para;</a> <a href="#top">&uarr;</a></span></h2>
 <ul><li>
 <p>測試與正式使用不同的 Supabase、Vercel 專案及密鑰。正式 URL 使用固定 HTTPS 網址，家人只需入口網帳號；不要給家人雲端管理團隊權限。</p>
 </li><li>

@@ -9,15 +9,17 @@ import axios from 'axios'
 import { isDemoMode } from '@/lib/demo/config'
 import { demoEvents } from '@/lib/demo/fixtures'
 import { rejectDemoWrite } from '@/lib/demo/actions'
+import { isVersionConflict, versionHeaders, type RecordVersion } from '@/lib/recordVersion'
 
 export function useCalendarEvents(start: string, end: string) {
   return useQuery({
     queryKey: ['events', start, end],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (isDemoMode) {
         return demoEvents.filter((event) => event.startDate <= end && (event.endDate ?? event.startDate) >= start)
       }
       const res = await api.get<ApiResponse<CalendarEvent[]>>('/api/hosted/events', {
+        signal,
         params: { start, end },
       })
       if (!res.data.success) throw new Error(res.data.message)
@@ -29,14 +31,14 @@ export function useCalendarEvents(start: string, end: string) {
 export function useCalendarEvent(id: string | null, enabled = true) {
   return useQuery({
     queryKey: ['events', 'detail', id],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!id) throw new Error('缺少事件識別碼')
       if (isDemoMode) {
         const event = demoEvents.find((item) => item.id === id)
         if (!event) throw new Error('找不到來源事件')
         return { ...event }
       }
-      const res = await api.get<ApiResponse<CalendarEvent>>(`/api/hosted/events/${id}`)
+      const res = await api.get<ApiResponse<CalendarEvent>>(`/api/hosted/events/${id}`, { signal })
       if (!res.data.success || !res.data.data) throw new Error(res.data.message || '找不到來源事件')
       return res.data.data
     },
@@ -72,9 +74,9 @@ export function useUpdateEvent() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: UpsertEventRequest }) => {
+    mutationFn: async ({ id, data, version }: RecordVersion & { data: UpsertEventRequest }) => {
       if (isDemoMode) return rejectDemoWrite()
-      const res = await api.put<ApiResponse<CalendarEvent>>(`/api/hosted/events/${id}`, data)
+      const res = await api.put<ApiResponse<CalendarEvent>>(`/api/hosted/events/${id}`, data, versionHeaders(version))
       if (!res.data.success) throw new Error(res.data.message)
       return res.data.data
     },
@@ -83,6 +85,7 @@ export function useUpdateEvent() {
       toast.success('事件已更新')
     },
     onError: (error) => {
+      if (isVersionConflict(error)) return
       if (axios.isAxiosError(error)) {
         toast.error(error.response?.data?.message || '更新失敗')
       } else {
@@ -96,9 +99,10 @@ export function useDeleteEvent() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (record: string | RecordVersion) => {
       if (isDemoMode) return rejectDemoWrite()
-      const res = await api.delete<ApiResponse<boolean>>(`/api/hosted/events/${id}`)
+      const { id, version } = typeof record === 'string' ? { id: record } : record
+      const res = await api.delete<ApiResponse<boolean>>(`/api/hosted/events/${id}`, versionHeaders(version))
       if (!res.data.success) throw new Error(res.data.message)
       return res.data.data
     },

@@ -11,13 +11,15 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { isVersionConflict, versionConflictMessage } from '@/lib/recordVersion'
 
 interface ConfirmDialogProps {
   trigger: React.ReactElement
   title: string
   description: string
   confirmLabel?: string
-  onConfirm: () => Promise<void> | void
+  recordVersion?: number
+  onConfirm: (version?: number) => Promise<void> | void
 }
 
 /// 提供焦點管理、Escape 取消與非同步等待狀態的危險操作確認視窗。
@@ -26,15 +28,18 @@ export default function ConfirmDialog({
   title,
   description,
   confirmLabel = '確認刪除',
+  recordVersion,
   onConfirm,
 }: ConfirmDialogProps) {
   const [open, setOpen] = useState(false)
   const [isPending, setIsPending] = useState(false)
+  const [confirmedVersion, setConfirmedVersion] = useState<number>()
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const cancelRef = useRef<HTMLButtonElement>(null)
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (isPending) return
+    if (nextOpen) setConfirmedVersion(recordVersion)
     setOpen(nextOpen)
     if (!nextOpen) setErrorMessage(null)
   }
@@ -43,10 +48,10 @@ export default function ConfirmDialog({
     setIsPending(true)
     setErrorMessage(null)
     try {
-      await onConfirm()
+      await onConfirm(confirmedVersion)
       setOpen(false)
-    } catch {
-      setErrorMessage('操作失敗，請稍後再試。')
+    } catch (error) {
+      setErrorMessage(isVersionConflict(error) ? versionConflictMessage : '操作失敗，請稍後再試。')
     } finally {
       setIsPending(false)
     }

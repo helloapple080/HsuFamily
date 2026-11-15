@@ -1,12 +1,10 @@
-import { Lunar, LunarYear, type LunarMonth } from 'lunar-javascript'
+import { LunarYear, Solar, type LunarMonth } from 'lunar-javascript'
 import { formatLunarDate } from '@/lib/lunar'
 import type { CalendarEvent, LeapMonthPolicy, RecurrenceRule } from '@/types/event'
 import type { LunarDate } from '@/types/member'
 import { dayMs } from './event-contract'
 
-const minLunarYear = 1900
 const yearMonths = new Map<number, LunarMonth[]>()
-const yearStartMonths = [0]
 
 function lunarMonths(year: number): LunarMonth[] {
   const cached = yearMonths.get(year)
@@ -14,15 +12,6 @@ function lunarMonths(year: number): LunarMonth[] {
   const months = LunarYear.fromYear(year).getMonthsInYear()
   yearMonths.set(year, months)
   return months
-}
-
-function lunarYearStartMonth(year: number): number {
-  const index = year - minLunarYear
-  while (yearStartMonths.length <= index) {
-    const previous = yearStartMonths.length - 1
-    yearStartMonths.push(yearStartMonths[previous] + lunarMonths(minLunarYear + previous).length)
-  }
-  return yearStartMonths[index]
 }
 
 function monthAllowed(policy: LeapMonthPolicy, signedMonth: number) {
@@ -45,26 +34,38 @@ function* solarCandidates(anchor: Date, rule: RecurrenceRule, earliest: Date, la
 
 function* lunarCandidates(anchor: LunarDate, rule: RecurrenceRule, earliest: Date, latest: Date): Generator<{ date: string; lunarDate: LunarDate }> {
   const isMonthly = rule.type === 'LunarMonthly'
-  const anchorMonth = lunarYearStartMonth(anchor.year) + lunarMonths(anchor.year).findIndex(
-    (month) => month.getMonth() === (anchor.isLeapMonth ? -anchor.month : anchor.month),
-  )
   const days = isMonthly ? rule.lunarDays ?? [] : [anchor.day]
   // 國曆年初可能仍在上一個農曆年；以候選日期再過濾。
   const firstYear = Math.max(anchor.year, earliest.getUTCFullYear() - 1)
   const lastYear = latest.getUTCFullYear()
+  const anchorIndex = isMonthly && (firstYear === anchor.year || rule.interval > 1)
+    ? lunarMonths(anchor.year).findIndex((month) => month.getMonth() === (anchor.isLeapMonth ? -anchor.month : anchor.month))
+    : 0
+  let elapsedMonths = -anchorIndex
+  // 多月週期只需計算從來源到視窗之間的月份；每月／每年週期不展開無關年份。
+  if (isMonthly && rule.interval > 1) {
+    for (let year = anchor.year; year < firstYear; year++) elapsedMonths += lunarMonths(year).length
+  }
+  const firstDay = Math.floor(earliest.getTime() / dayMs)
+  const lastDay = Math.floor(latest.getTime() / dayMs)
   for (let year = firstYear; year <= lastYear; year++) {
     if (!isMonthly && (year - anchor.year) % rule.interval !== 0) continue
-    for (const [index, month] of lunarMonths(year).entries()) {
+    const months = lunarMonths(year)
+    for (const [index, month] of months.entries()) {
       const signedMonth = month.getMonth()
       if (!monthAllowed(rule.leapMonthPolicy, signedMonth)) continue
       if (isMonthly) {
-        const delta = lunarYearStartMonth(year) + index - anchorMonth
-        if (delta < 0 || delta % rule.interval !== 0) continue
+        if (year === anchor.year && index < anchorIndex) continue
+        if (rule.interval > 1 && (elapsedMonths + index) % rule.interval !== 0) continue
       } else if (Math.abs(signedMonth) !== anchor.month) continue
+
+      // 只需要每月首日的國曆日期；不反覆計算候選日的節氣與干支。
+      const solar = Solar.fromJulianDay(month.getFirstJulianDay())
+      const monthFirstDay = Date.UTC(solar.getYear(), solar.getMonth() - 1, solar.getDay()) / dayMs
       for (const day of days) {
-        if (day > month.getDayCount()) continue
-        const solar = Lunar.fromYmd(year, signedMonth, day).getSolar()
-        const date = new Date(Date.UTC(solar.getYear(), solar.getMonth() - 1, solar.getDay())).toISOString().slice(0, 10)
+        const solarDay = monthFirstDay + day - 1
+        if (day > month.getDayCount() || solarDay < firstDay || solarDay > lastDay) continue
+        const date = new Date(solarDay * dayMs).toISOString().slice(0, 10)
         yield {
           date,
           lunarDate: {
@@ -74,6 +75,7 @@ function* lunarCandidates(anchor: LunarDate, rule: RecurrenceRule, earliest: Dat
         }
       }
     }
+    elapsedMonths += months.length
   }
 }
 

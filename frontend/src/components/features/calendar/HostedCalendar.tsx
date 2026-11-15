@@ -11,6 +11,7 @@ import { useAuthStore } from '@/stores/authStore'
 import WorshipEditor from './WorshipEditor'
 import PrivatePhotos from '@/components/features/media/PrivatePhotos'
 import { isAxiosError } from 'axios'
+import { isVersionConflict, versionConflictMessage } from '@/lib/recordVersion'
 
 const emptyRule: WorshipInput = { title: '', lunarMonth: 1, lunarDay: 1, leapMonthPolicy: 'RegularOnly', notes: '' }
 const emptyRules: WorshipRule[] = []
@@ -67,10 +68,13 @@ export default function HostedCalendar() {
           {isAdmin && editor && <WorshipEditor key={editor === 'new' ? 'new' : editor.id}
             initial={editor === 'new' ? emptyRule : editor} onCancel={() => setEditor(null)}
             onSave={async (input) => {
-              await save.mutateAsync({ input, id: editor === 'new' ? undefined : editor.id })
+              await save.mutateAsync({
+                input, id: editor === 'new' ? undefined : editor.id, version: editor === 'new' ? undefined : editor.version,
+              })
               setEditor((current) => current === editor ? null : current)
             }} />}
-          {remove.isError && <p role="alert">{isAxiosError(remove.error) && remove.error.response?.status === 409
+          {remove.isError && <p role="alert">{isVersionConflict(remove.error) ? versionConflictMessage
+            : isAxiosError(remove.error) && remove.error.response?.status === 409
             ? '請先移除這筆規則的照片，再刪除規則。' : '刪除未完成，請稍後再試。'}</p>}
           <ul className="space-y-2">
             {entries.map((rule) => <li key={rule.id} className="space-y-2 rounded-md border border-border p-3">
@@ -79,7 +83,7 @@ export default function HostedCalendar() {
                 {isAdmin && <>
                   <Button type="button" variant="outline" aria-label={`編輯 ${rule.title}`} onClick={() => setEditor(rule)}>編輯</Button>
                   <Button type="button" variant="destructive" aria-label={`刪除 ${rule.title}`} disabled={remove.isPending}
-                    onClick={() => { if (window.confirm(`確定刪除「${rule.title}」？`)) remove.mutate(rule.id) }}>刪除</Button>
+                    onClick={() => { if (window.confirm(`確定刪除「${rule.title}」？`)) remove.mutate({ id: rule.id, version: rule.version }) }}>刪除</Button>
                 </>}
               </div>
               <PrivatePhotos kind="worship" id={rule.id} title={rule.title} />

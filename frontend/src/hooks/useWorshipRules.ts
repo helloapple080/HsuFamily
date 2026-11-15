@@ -6,10 +6,12 @@ import api from '@/lib/api'
 import { worshipRule, type WorshipInput } from '@/lib/hosted/worship-contract'
 import { useAuthStore } from '@/stores/authStore'
 import type { ApiResponse } from '@/types/api'
+import { versionHeaders, type RecordVersion } from '@/lib/recordVersion'
 
 interface SaveRule {
   id?: string
   input: WorshipInput
+  version?: number
 }
 
 const url = '/api/hosted/worship'
@@ -31,14 +33,14 @@ export function useWorshipRules() {
     },
   })
   const save = useMutation({
-    mutationFn: async ({ id, input }: SaveRule) => {
-      if (id) await api.put(`${url}/${id}`, input)
+    mutationFn: async ({ id, input, version }: SaveRule) => {
+      if (id) await api.put(`${url}/${id}`, input, versionHeaders(version))
       else await api.post(url, input)
     },
     onSuccess: refresh,
   })
   const remove = useMutation({
-    mutationFn: async (id: string) => { await api.delete(`${url}/${id}`) },
+    mutationFn: async ({ id, version }: RecordVersion) => { await api.delete(`${url}/${id}`, versionHeaders(version)) },
     onSuccess: refresh,
   })
   return { rules, save, remove }

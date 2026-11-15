@@ -91,7 +91,8 @@ export default function ItinerariesPage() {
                             trigger={<Button variant="destructive" size="icon" className="size-11" aria-label={`刪除行程：${item.title}`}><Trash2 aria-hidden="true" /></Button>}
                             title={`刪除行程 ${item.title}？`}
                             description={isHostedMode ? '如有照片，請先從照片區移除。刪除行程後無法復原。' : '行程紀錄刪除後無法復原，請確認後再繼續。'}
-                            onConfirm={async () => { await deleteMutation.mutateAsync(item.id) }}
+                            recordVersion={item.version}
+                            onConfirm={async (version) => { await deleteMutation.mutateAsync({ id: item.id, version }) }}
                           />
                         </div>
                       </AdminOnly>

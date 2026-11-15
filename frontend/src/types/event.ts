@@ -30,6 +30,7 @@ export interface WorshipDetails {
 /// 行事曆事件
 export interface CalendarEvent {
   id: string
+  version?: number
   title: string
   description?: string | null
   eventType: EventType
@@ -76,6 +77,7 @@ export interface ParticipantSnapshot {
 /// 行程紀錄
 export interface Itinerary {
   id: string
+  version?: number
   title: string
   description?: string | null
   date: string

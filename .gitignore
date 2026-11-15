@@ -22,6 +22,7 @@ __MACOSX/
 # Codex 隔離工作區與暫存進度
 .worktrees/
 .superpowers/
+.wrangler/
 
 # ─── 前端 ───
 **/node_modules/

@@ -14,6 +14,7 @@ declare module 'lunar-javascript' {
 
   export class Solar {
     static fromYmd(year: number, month: number, day: number): Solar
+    static fromJulianDay(julianDay: number): Solar
     getLunar(): Lunar
     getYear(): number
     getMonth(): number
@@ -24,6 +25,7 @@ declare module 'lunar-javascript' {
   export class LunarMonth {
     getMonth(): number
     getDayCount(): number
+    getFirstJulianDay(): number
   }
 
   export class LunarYear {

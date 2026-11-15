@@ -1,0 +1,3 @@
+:root.light { color-scheme: light; }
+:root.dark { color-scheme: dark; }
+html.awaiting-portal-reload body { visibility: hidden; }

@@ -40,3 +40,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Cloudflare local state, browser build and account-specific configs
+/dist-spa/
+/.wrangler/
+/.dev.vars*
+/wrangler.*.local.jsonc

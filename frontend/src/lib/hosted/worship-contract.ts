@@ -8,6 +8,6 @@ export const worshipInput = z.strictObject({
   notes: z.string().trim().max(2000),
 })
 
-export const worshipRule = worshipInput.extend({ id: z.uuid() })
+export const worshipRule = worshipInput.extend({ id: z.uuid(), version: z.number().int().positive().optional() })
 export type WorshipInput = z.infer<typeof worshipInput>
 export type WorshipRule = z.infer<typeof worshipRule>

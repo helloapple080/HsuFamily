@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { worshipInput, type WorshipInput } from '@/lib/hosted/worship-contract'
+import { isVersionConflict, versionConflictMessage } from '@/lib/recordVersion'
 
 interface WorshipEditorProps {
   initial: WorshipInput
@@ -33,8 +34,8 @@ export default function WorshipEditor({ initial, onSave, onCancel }: WorshipEdit
     setError('')
     try {
       await onSave(result.data)
-    } catch {
-      setError('儲存未完成，請確認權限或稍後再試。')
+    } catch (error) {
+      setError(isVersionConflict(error) ? versionConflictMessage : '儲存未完成，請確認權限或稍後再試。')
     } finally {
       setBusy(false)
     }

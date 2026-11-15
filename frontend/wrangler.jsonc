@@ -1,0 +1,23 @@
+{
+  // 僅供本機建置與乾跑驗證；正式與預備環境使用獨立的本機設定檔。
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "hsu-family-local",
+  "main": "edge/index.ts",
+  "compatibility_date": "2026-11-13",
+  "workers_dev": false,
+  "preview_urls": false,
+  "send_metrics": false,
+  "assets": {
+    "directory": "./dist-spa",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api", "/api/*"]
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "hsu-family-local",
+    "database_id": "00000000-0000-0000-0000-000000000000",
+    "migrations_dir": "edge/migrations"
+  }],
+  "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "hsu-family-local" }],
+  "images": { "binding": "IMAGES" }
+}

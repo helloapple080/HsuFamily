@@ -66,7 +66,8 @@ export default function MembersPage() {
                         }
                         title={`刪除成員 ${member.name}？`}
                         description={isHostedMode ? '如有頭像，請先從頭像區移除。刪除成員後無法復原。' : '成員資料刪除後無法復原，請確認後再繼續。'}
-                        onConfirm={async () => { await deleteMutation.mutateAsync(member.id) }}
+                        recordVersion={member.version}
+                        onConfirm={async (version) => { await deleteMutation.mutateAsync({ id: member.id, version }) }}
                       />
                     </div>
                   </AdminOnly>
