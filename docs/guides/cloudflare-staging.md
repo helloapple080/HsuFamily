@@ -16,6 +16,8 @@
 6. **上傳 Worker。** 用 Git 忽略的 `wrangler.staging.local.jsonc` 乾跑，確認只連測試 D1，再用相同設定部署。不開 `workers.dev`、預覽網址、網域或排程。Cloudflare 回報 `No targets deployed`：程式已上傳，沒有對外網址。
 7. **假資料與還原。** 匯入假規則和停用帳號；補齊樣本標題、閏月規則和備註後重跑同一筆。匯出三張應用表，在空白的本機 SQLite 還原。完整性檢查為 `ok`、無外鍵錯誤，帳號／規則／照片筆數為 `1 / 1 / 0`，日期為農曆八月十五。這次沒有雲端照片可用來驗收圖片備份。
 8. **查下一步、不提交結帳。** Zero Trust 後台仍顯示「Welcome」和「Get started」，尚未建立組織。本次只查看，沒有開通方案或放行網址。
+9. **查 US$0 是否能止扣。** Cloudflare 的「Spending limit」可停止 Workers 或 Durable Objects 的部分作業，必須填大於 US$0，且不涵蓋 R2；「Budget alert」只寄通知，不停止用量。不設定無法達成目的的警報，也不升級方案。重新乾跑測試站，確認只有測試 D1 綁定，沒有 R2、Images、公開路由或排程。
+10. **準備免費登入、停在最後一頁。** 在 Zero Trust 按「Get started」，選擇 Free，進到「Activate Zero Trust Free」。畫面顯示應付 US$0／月，但另列有超出免費額度可向卡片扣款的授權。我沒有勾選同意，也沒有按啟用。測試站仍未開放網址。
 
 ## 怎麼重做（維運者）
 
@@ -61,5 +63,5 @@ shasum -a 256 "$audit_dir/backup.sql"
 ## 費用與下一個門檻
 
 - [Workers Free](https://developers.cloudflare.com/workers/platform/limits/) 和 [D1 Free](https://developers.cloudflare.com/d1/platform/pricing/) 有用量上限；保留 Free，避免超量時切換付費方案。不要為試站購買網域。
-- [R2 Standard](https://developers.cloudflare.com/r2/pricing/#free-tier) 有免費用量，但帳戶總用量超額會計費。[預算警報](https://developers.cloudflare.com/billing/manage/spend-management/) 是寄通知，不是阻擋 R2 扣款。要求零額外扣款時，就不接上有超額計費可能的 R2；如果帳戶只為此專案開通 R2、又不打算用，可由帳戶持有人在帳單頁自行檢查及取消訂閱，切勿刪除其他用途的資源。
-- 還沒有測試網址給家人使用。到 [Zero Trust 後台](https://dash.cloudflare.com/?to=/:account/one/overview) 選「Get started」，由帳戶持有人選 **Free** 並在最後一步核對金額為 **US$0**。[官方開通說明](https://developers.cloudflare.com/cloudflare-one/setup/) 表示 Free 仍須付款資料，但不收費；若畫面要求升級、顯示非零金額或條款不清楚，就不要提交。開通後再用測試信箱驗收 Access、來源與唯讀角色。照片這階段只做本機驗收，既有正式站與資料維持不動。
+- [R2 Standard](https://developers.cloudflare.com/r2/pricing/#free-tier) 有免費用量，帳戶總用量超額會計費。[Cloudflare 支出控制說明](https://developers.cloudflare.com/billing/manage/spend-management/) 指出真正的止扣上限不涵蓋 R2，也不保證帳單上限；[預算警報](https://developers.cloudflare.com/billing/manage/budget-alerts/) 只寄通知。要求零額外扣款時不連接 R2；若帳戶只為此專案開通 R2、又不打算用，可由帳戶持有人在帳單頁檢查及取消訂閱，切勿刪除其他用途的資源。
+- Zero Trust Free 的「今天 US$0」是方案價格，不是帳戶零元止扣設定。即使[官方開通說明](https://developers.cloudflare.com/cloudflare-one/setup/) 指出 Free 方案本身不收費，仍要看你的結帳條件。如果不接受超額扣款授權，請勿按啟用；維持私人測試站無網址，可先用[唯讀假資料展示](https://helloapple080.github.io/HsuFamily/)或本機驗證。如果帳戶持有人親自接受並啟用，仍只會先用少數測試信箱驗收 Access、來源與唯讀角色，不開 R2、沒有正式資料，也不升級。

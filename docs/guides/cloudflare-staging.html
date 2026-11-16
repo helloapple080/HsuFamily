@@ -44,6 +44,10 @@
 <p><strong>假資料與還原。</strong> 匯入假規則和停用帳號；補齊樣本標題、閏月規則和備註後重跑同一筆。匯出三張應用表，在空白的本機 SQLite 還原。完整性檢查為 <code>ok</code>、無外鍵錯誤，帳號／規則／照片筆數為 <code>1 / 1 / 0</code>，日期為農曆八月十五。這次沒有雲端照片可用來驗收圖片備份。</p>
 </li><li>
 <p><strong>查下一步、不提交結帳。</strong> Zero Trust 後台仍顯示「Welcome」和「Get started」，尚未建立組織。本次只查看，沒有開通方案或放行網址。</p>
+</li><li>
+<p><strong>查 US$0 是否能止扣。</strong> Cloudflare 的「Spending limit」可停止 Workers 或 Durable Objects 的部分作業，必須填大於 US$0，且不涵蓋 R2；「Budget alert」只寄通知，不停止用量。不設定無法達成目的的警報，也不升級方案。重新乾跑測試站，確認只有測試 D1 綁定，沒有 R2、Images、公開路由或排程。</p>
+</li><li>
+<p><strong>準備免費登入、停在最後一頁。</strong> 在 Zero Trust 按「Get started」，選擇 Free，進到「Activate Zero Trust Free」。畫面顯示應付 US$0／月，但另列有超出免費額度可向卡片扣款的授權。我沒有勾選同意，也沒有按啟用。測試站仍未開放網址。</p>
 </li></ol>
 
 <h2>怎麼重做（維運者）<span><a href="#label-E6-80-8E-E9-BA-BC-E9-87-8D-E5-81-9A-EF-BC-88-E7-B6-AD-E9-81-8B-E8-80-85-EF-BC-89">&para;</a> <a href="#top">&uarr;</a></span></h2>
@@ -85,9 +89,9 @@ shasum -a 256 &quot;$audit_dir/backup.sql&quot;</pre>
 <ul><li>
 <p><a href="https://developers.cloudflare.com/workers/platform/limits/">Workers Free</a> 和 <a href="https://developers.cloudflare.com/d1/platform/pricing/">D1 Free</a> 有用量上限；保留 Free，避免超量時切換付費方案。不要為試站購買網域。</p>
 </li><li>
-<p><a href="https://developers.cloudflare.com/r2/pricing/#free-tier">R2 Standard</a> 有免費用量，但帳戶總用量超額會計費。<a href="https://developers.cloudflare.com/billing/manage/spend-management/">預算警報</a> 是寄通知，不是阻擋 R2 扣款。要求零額外扣款時，就不接上有超額計費可能的 R2；如果帳戶只為此專案開通 R2、又不打算用，可由帳戶持有人在帳單頁自行檢查及取消訂閱，切勿刪除其他用途的資源。</p>
+<p><a href="https://developers.cloudflare.com/r2/pricing/#free-tier">R2 Standard</a> 有免費用量，帳戶總用量超額會計費。<a href="https://developers.cloudflare.com/billing/manage/spend-management/">Cloudflare 支出控制說明</a> 指出真正的止扣上限不涵蓋 R2，也不保證帳單上限；<a href="https://developers.cloudflare.com/billing/manage/budget-alerts/">預算警報</a> 只寄通知。要求零額外扣款時不連接 R2；若帳戶只為此專案開通 R2、又不打算用，可由帳戶持有人在帳單頁檢查及取消訂閱，切勿刪除其他用途的資源。</p>
 </li><li>
-<p>還沒有測試網址給家人使用。到 <a href="https://dash.cloudflare.com/?to=/:account/one/overview">Zero Trust 後台</a> 選「Get started」，由帳戶持有人選 <strong>Free</strong> 並在最後一步核對金額為 <strong>US$0</strong>。<a href="https://developers.cloudflare.com/cloudflare-one/setup/">官方開通說明</a> 表示 Free 仍須付款資料，但不收費；若畫面要求升級、顯示非零金額或條款不清楚，就不要提交。開通後再用測試信箱驗收 Access、來源與唯讀角色。照片這階段只做本機驗收，既有正式站與資料維持不動。</p>
+<p>Zero Trust Free 的「今天 US$0」是方案價格，不是帳戶零元止扣設定。即使<a href="https://developers.cloudflare.com/cloudflare-one/setup/">官方開通說明</a> 指出 Free 方案本身不收費，仍要看你的結帳條件。如果不接受超額扣款授權，請勿按啟用；維持私人測試站無網址，可先用<a href="https://helloapple080.github.io/HsuFamily/">唯讀假資料展示</a>或本機驗證。如果帳戶持有人親自接受並啟用，仍只會先用少數測試信箱驗收 Access、來源與唯讀角色，不開 R2、沒有正式資料，也不升級。</p>
 </li></ul>
   </main>
 </body>
