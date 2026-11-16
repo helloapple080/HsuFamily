@@ -15,6 +15,7 @@
 5. **建立隔離資料庫。** 確認雲端沒有同名 D1 後建立 `hsu-family-staging`（亞太區）；兩個遷移 `0001_portal.sql`、`0002_photos.sql` 均成功。雖已有照片資料表，但沒有 R2 綁定或照片。
 6. **上傳 Worker。** 用 Git 忽略的 `wrangler.staging.local.jsonc` 乾跑，確認只連測試 D1，再用相同設定部署。不開 `workers.dev`、預覽網址、網域或排程。Cloudflare 回報 `No targets deployed`：程式已上傳，沒有對外網址。
 7. **假資料與還原。** 匯入假規則和停用帳號；補齊樣本標題、閏月規則和備註後重跑同一筆。匯出三張應用表，在空白的本機 SQLite 還原。完整性檢查為 `ok`、無外鍵錯誤，帳號／規則／照片筆數為 `1 / 1 / 0`，日期為農曆八月十五。這次沒有雲端照片可用來驗收圖片備份。
+8. **查下一步、不提交結帳。** Zero Trust 後台仍顯示「Welcome」和「Get started」，尚未建立組織。本次只查看，沒有開通方案或放行網址。
 
 ## 怎麼重做（維運者）
 
@@ -61,4 +62,4 @@ shasum -a 256 "$audit_dir/backup.sql"
 
 - [Workers Free](https://developers.cloudflare.com/workers/platform/limits/) 和 [D1 Free](https://developers.cloudflare.com/d1/platform/pricing/) 有用量上限；保留 Free，避免超量時切換付費方案。不要為試站購買網域。
 - [R2 Standard](https://developers.cloudflare.com/r2/pricing/#free-tier) 有免費用量，但帳戶總用量超額會計費。[預算警報](https://developers.cloudflare.com/billing/manage/spend-management/) 是寄通知，不是阻擋 R2 扣款。要求零額外扣款時，就不接上有超額計費可能的 R2；如果帳戶只為此專案開通 R2、又不打算用，可由帳戶持有人在帳單頁自行檢查及取消訂閱，切勿刪除其他用途的資源。
-- 還沒有正式或測試網址給家人使用。下一階段先在 Zero Trust **Free** 用自己的測試信箱驗證 Access、來源與唯讀角色；後台要求升級、付費或不清楚條款就停。照片這階段只做本機驗收。沒有完成雲端登入、角色與照片儲存及還原驗收，不切換正式站，也不搬用原資料。
+- 還沒有測試網址給家人使用。到 [Zero Trust 後台](https://dash.cloudflare.com/?to=/:account/one/overview) 選「Get started」，由帳戶持有人選 **Free** 並在最後一步核對金額為 **US$0**。[官方開通說明](https://developers.cloudflare.com/cloudflare-one/setup/) 表示 Free 仍須付款資料，但不收費；若畫面要求升級、顯示非零金額或條款不清楚，就不要提交。開通後再用測試信箱驗收 Access、來源與唯讀角色。照片這階段只做本機驗收，既有正式站與資料維持不動。
