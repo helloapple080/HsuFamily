@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>許氏入口網 Cloudflare 測試站：操作紀錄與零扣款檢查</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, "PingFang TC", sans-serif; }
+    body { max-width: 48rem; margin: auto; padding: 2rem 1.25rem 4rem; line-height: 1.75; }
+    h1, h2 { line-height: 1.3; }
+    h2 { margin-top: 2rem; border-top: 1px solid GrayText; padding-top: 1rem; }
+    a { text-underline-offset: .2em; }
+    pre { overflow-x: auto; padding: 1rem; border: 1px solid GrayText; border-radius: .5rem; }
+    code, tt { overflow-wrap: anywhere; }
+    li + li { margin-top: .35rem; }
+    @media print { nav { display: none; } pre { white-space: pre-wrap; } h2 { break-after: avoid; } }
+  </style>
+</head>
+<body>
+  <nav aria-label="手冊切換"><a href="user.html">家人使用</a> · <a href="developer.html">開發與部署</a> · <a href="cloudflare-staging.html">Cloudflare 實作紀錄</a></nav>
+  <main>
+<h1>許氏入口網 Cloudflare 測試站：操作紀錄與零扣款檢查<span><a href="#label-E8-A8-B1-E6-B0-8F-E5-85-A5-E5-8F-A3-E7-B6-B2+Cloudflare+-E6-B8-AC-E8-A9-A6-E7-AB-99-EF-BC-9A-E6-93-8D-E4-BD-9C-E7-B4-80-E9-8C-84-E8-88-87-E9-9B-B6-E6-89-A3-E6-AC-BE-E6-AA-A2-E6-9F-A5">&para;</a> <a href="#top">&uarr;</a></span></h1>
+
+<p>2026-11-16（台北時間） · 測試程式版本 <code>a2c2761</code> · <a href="developer.html">開發者手冊</a> · <a href="user.html">家人手冊</a></p>
+
+<h2>結論先看<span><a href="#label-E7-B5-90-E8-AB-96-E5-85-88-E7-9C-8B">&para;</a> <a href="#top">&uarr;</a></span></h2>
+
+<p>已把 React＋Vite 的測試版本上傳到 Cloudflare，但沒有開啟對外網址。測試資料庫 D1 能備份並還原；目前只有一筆假拜拜規則和一個停用的示例帳號。正式網站、MongoDB 和既有照片未動。現在不用重做登入、建立資料庫，也不要為了讓測試站上線按「Upgrade」。</p>
+
+<h2>實際做了什麼<span><a href="#label-E5-AF-A6-E9-9A-9B-E5-81-9A-E4-BA-86-E4-BB-80-E9-BA-BC">&para;</a> <a href="#top">&uarr;</a></span></h2>
+<ol><li>
+<p><strong>準備程式。</strong> 沿用 React 介面，改由 Vite 建置；Worker 分開管登入、權限與資料。保留 Next.js／Supabase 回退和 GitHub Pages 假資料展示。程式在 <code>codex/cloudflare-react</code>；<a href="https://github.com/helloapple080/HsuFamily/actions/runs/43775310531">GitHub CI</a> 已通過。</p>
+</li><li>
+<p><strong>授權 CLI。</strong> 我啟動 Wrangler，你在 Cloudflare 瀏覽器按允許。第一次交換憑證逾時；查到 IPv6 不通，IPv4 能連線，改用 IPv4 優先後重新授權成功。<code>wrangler whoami</code> 已確認登入；文件不公開信箱、權杖、帳戶編號或資料庫 UUID。</p>
+</li><li>
+<p><strong>檢查費用。</strong> 後台 Workers plans 顯示 Free 是目前方案；R2 Overview 顯示已開通，但沒有桶，使用量為零。這次沒有升級、購買網域、建 R2 桶或開 Images；部署後再查看 R2，當期應計費金額仍顯示 US$0.00。</p>
+</li><li>
+<p><strong>驗證本機建置。</strong> 用 <code>pnpm check:cloudflare</code> 做 Vite 建置和部署乾跑，再執行 <code>pnpm test</code>。148 項通過，含權限、農曆、照片驗證和競爭寫入。本機照片測試不等於雲端照片驗收。</p>
+</li><li>
+<p><strong>建立隔離資料庫。</strong> 確認雲端沒有同名 D1 後建立 <code>hsu-family-staging</code>（亞太區）；兩個遷移 <code>0001_portal.sql</code>、<code>0002_photos.sql</code> 均成功。雖已有照片資料表，但沒有 R2 綁定或照片。</p>
+</li><li>
+<p><strong>上傳 Worker。</strong> 用 Git 忽略的 <code>wrangler.staging.local.jsonc</code> 乾跑，確認只連測試 D1，再用相同設定部署。不開 <code>workers.dev</code>、預覽網址、網域或排程。Cloudflare 回報 <code>No targets deployed</code>：程式已上傳，沒有對外網址。</p>
+</li><li>
+<p><strong>假資料與還原。</strong> 匯入假規則和停用帳號；補齊樣本標題、閏月規則和備註後重跑同一筆。匯出三張應用表，在空白的本機 SQLite 還原。完整性檢查為 <code>ok</code>、無外鍵錯誤，帳號／規則／照片筆數為 <code>1 / 1 / 0</code>，日期為農曆八月十五。這次沒有雲端照片可用來驗收圖片備份。</p>
+</li></ol>
+
+<h2>怎麼重做（維運者）<span><a href="#label-E6-80-8E-E9-BA-BC-E9-87-8D-E5-81-9A-EF-BC-88-E7-B6-AD-E9-81-8B-E8-80-85-EF-BC-89">&para;</a> <a href="#top">&uarr;</a></span></h2>
+
+<p>以下在專案的 <code>frontend</code> 資料夾操作；<code>--remote</code> 代表會改動或讀取雲端，不能用在正式站。這次已做過，只有換電腦、重建測試環境或演練才需要重跑。</p>
+
+<pre># 若登入逾時，僅在此終端優先使用已驗證可連線的 IPv4。
+export NODE_OPTIONS=--dns-result-order=ipv4first
+pnpm exec wrangler whoami
+# 若尚未登入，才執行 pnpm exec wrangler login 並手動授權。
+pnpm check:cloudflare
+pnpm test
+pnpm exec wrangler d1 list --json
+# 只有結果沒有 hsu-family-staging 才建立：
+pnpm exec wrangler d1 create hsu-family-staging --location apac</pre>
+
+<p>從 <code>wrangler.jsonc</code> 複製為 <code>wrangler.staging.local.jsonc</code>，把 Worker 與 D1 名稱都換成 <code>hsu-family-staging</code>、D1 ID 換成剛核對的測試 UUID。保留 <code>workers_dev: false</code>、<code>preview_urls: false</code>；刪除 <code>r2_buckets</code> 和 <code>images</code>，也不加入 <code>vars</code>、公開路由或排程。先確認設定檔被 Git 忽略、乾跑只列出 <code>DB</code>，才做後續。</p>
+
+<pre>git check-ignore wrangler.staging.local.jsonc
+pnpm exec wrangler deploy --dry-run --config wrangler.staging.local.jsonc
+pnpm exec wrangler d1 migrations apply DB --remote --config wrangler.staging.local.jsonc
+pnpm exec wrangler deploy --config wrangler.staging.local.jsonc
+pnpm exec wrangler d1 execute DB --remote --config wrangler.staging.local.jsonc \
+  --file ../docs/guides/examples/cloudflare-staging-seed.sql</pre>
+
+<p>備份與還原只用假資料。匯出時 Wrangler 可能顯示短期有效下載連結；不要貼到聊天、Git 或共用文件。若正式資料要備份，應使用加密儲存，並另行備份圖片本體；D1 的 SQL 不含圖片。</p>
+
+<pre>audit_dir=$(mktemp -d)
+pnpm exec wrangler d1 export DB --remote --config wrangler.staging.local.jsonc \
+  --output &quot;$audit_dir/backup.sql&quot; --table portal_access portal_records portal_photos
+sqlite3 -bail &quot;$audit_dir/restore.sqlite&quot; &lt; &quot;$audit_dir/backup.sql&quot;
+sqlite3 -bail &quot;$audit_dir/restore.sqlite&quot; &quot;PRAGMA integrity_check; PRAGMA foreign_key_check;&quot;
+sqlite3 -bail &quot;$audit_dir/restore.sqlite&quot; &quot;SELECT (SELECT count(*) FROM portal_access WHERE active=0), (SELECT count(*) FROM portal_records WHERE kind=&#39;worship&#39;), (SELECT count(*) FROM portal_photos);&quot;
+shasum -a 256 &quot;$audit_dir/backup.sql&quot;</pre>
+
+<p>預期第一條檢查印出 <code>ok</code>，外鍵無錯誤。第二條檢查在這份測試資料為 <code>1|1|0</code>。備份本身不進 Git 或 Obsidian。</p>
+
+<h2>費用與下一個門檻<span><a href="#label-E8-B2-BB-E7-94-A8-E8-88-87-E4-B8-8B-E4-B8-80-E5-80-8B-E9-96-80-E6-AA-BB">&para;</a> <a href="#top">&uarr;</a></span></h2>
+<ul><li>
+<p><a href="https://developers.cloudflare.com/workers/platform/limits/">Workers Free</a> 和 <a href="https://developers.cloudflare.com/d1/platform/pricing/">D1 Free</a> 有用量上限；保留 Free，避免超量時切換付費方案。不要為試站購買網域。</p>
+</li><li>
+<p><a href="https://developers.cloudflare.com/r2/pricing/#free-tier">R2 Standard</a> 有免費用量，但帳戶總用量超額會計費。<a href="https://developers.cloudflare.com/billing/manage/spend-management/">預算警報</a> 是寄通知，不是阻擋 R2 扣款。要求零額外扣款時，就不接上有超額計費可能的 R2；如果帳戶只為此專案開通 R2、又不打算用，可由帳戶持有人在帳單頁自行檢查及取消訂閱，切勿刪除其他用途的資源。</p>
+</li><li>
+<p>還沒有正式或測試網址給家人使用。下一階段先在 Zero Trust <strong>Free</strong> 用自己的測試信箱驗證 Access、來源與唯讀角色；後台要求升級、付費或不清楚條款就停。照片這階段只做本機驗收。沒有完成雲端登入、角色與照片儲存及還原驗收，不切換正式站，也不搬用原資料。</p>
+</li></ul>
+  </main>
+</body>
+</html>

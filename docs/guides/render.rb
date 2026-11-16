@@ -6,13 +6,13 @@ require 'rdoc/markdown'
 
 abort "Usage: ruby docs/guides/render.rb [--check]" unless [[], ['--check']].include?(ARGV)
 
-%w[developer user].each do |guide|
+%w[developer user cloudflare-staging].each do |guide|
   source = File.read(File.join(__dir__, "#{guide}.md"), encoding: 'UTF-8')
   title = source.lines.first.delete_prefix('# ').strip
   options = RDoc::Options.new
   options.output_decoration = false
   body = RDoc::Markdown.new.parse(source).accept(RDoc::Markup::ToHtml.new(options))
-  body = body.gsub('href="user.md"', 'href="user.html"')
+  body = body.gsub(/href="(developer|user|cloudflare-staging)\.md"/, 'href="\1.html"')
   rendered = <<~HTML
     <!doctype html>
     <html lang="zh-Hant">
@@ -33,7 +33,7 @@ abort "Usage: ruby docs/guides/render.rb [--check]" unless [[], ['--check']].inc
       </style>
     </head>
     <body>
-      <nav aria-label="手冊切換"><a href="user.html">家人使用</a> · <a href="developer.html">開發與部署</a></nav>
+      <nav aria-label="手冊切換"><a href="user.html">家人使用</a> · <a href="developer.html">開發與部署</a> · <a href="cloudflare-staging.html">Cloudflare 實作紀錄</a></nav>
       <main>
     #{body.strip}
       </main>

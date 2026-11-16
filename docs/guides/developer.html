@@ -17,7 +17,7 @@
   </style>
 </head>
 <body>
-  <nav aria-label="手冊切換"><a href="user.html">家人使用</a> · <a href="developer.html">開發與部署</a></nav>
+  <nav aria-label="手冊切換"><a href="user.html">家人使用</a> · <a href="developer.html">開發與部署</a> · <a href="cloudflare-staging.html">Cloudflare 實作紀錄</a></nav>
   <main>
 <h1>許氏入口網開發與部署手冊<span><a href="#label-E8-A8-B1-E6-B0-8F-E5-85-A5-E5-8F-A3-E7-B6-B2-E9-96-8B-E7-99-BC-E8-88-87-E9-83-A8-E7-BD-B2-E6-89-8B-E5-86-8A">&para;</a> <a href="#top">&uarr;</a></span></h1>
 
@@ -39,7 +39,11 @@ pnpm dev:cloudflare</pre>
 
 <p><code>check:cloudflare</code> 只建置 Vite 和檢查 Worker 打包。開啟 Wrangler 顯示的本機網址可查看網頁殼；私人 API 無驗簽設定回 503。沒有可部署的測試身分／驗簽後門。登入和照片的真實服務行為還須雲端驗證；本機測試不構成上線許可。</p>
 
-<h3>建立隔離雲端驗收站<span><a href="#label-E5-BB-BA-E7-AB-8B-E9-9A-94-E9-9B-A2-E9-9B-B2-E7-AB-AF-E9-A9-97-E6-94-B6-E7-AB-99">&para;</a> <a href="#top">&uarr;</a></span></h3>
+<h3>目前進度與零額外扣款規則<span><a href="#label-E7-9B-AE-E5-89-8D-E9-80-B2-E5-BA-A6-E8-88-87-E9-9B-B6-E9-A1-8D-E5-A4-96-E6-89-A3-E6-AC-BE-E8-A6-8F-E5-89-87">&para;</a> <a href="#top">&uarr;</a></span></h3>
+
+<p>先看<a href="cloudflare-staging.html">這次實作紀錄與可重做步驟</a>。目前只部署無路由的 Workers Free 與測試 D1；R2 已開通，但本入口網沒有建立桶，也沒有連接 R2 或 Images。下列完整驗收流程含<strong>未獲執行許可的超額計費服務</strong>，不是已完成的清單。零額外扣款是硬限制時，請勿執行其中 R2／Images 連接步驟。</p>
+
+<h3>完整雲端驗收流程（目前只執行免費且已驗證的部分）<span><a href="#label-E5-AE-8C-E6-95-B4-E9-9B-B2-E7-AB-AF-E9-A9-97-E6-94-B6-E6-B5-81-E7-A8-8B-EF-BC-88-E7-9B-AE-E5-89-8D-E5-8F-AA-E5-9F-B7-E8-A1-8C-E5-85-8D-E8-B2-BB-E4-B8-94-E5-B7-B2-E9-A9-97-E8-AD-89-E7-9A-84-E9-83-A8-E5-88-86-EF-BC-89">&para;</a> <a href="#top">&uarr;</a></span></h3>
 <ol><li>
 <p>維運者先在 <code>frontend</code> 執行 <code>pnpm exec wrangler login</code> 完成瀏覽器授權，再用 <code>pnpm exec wrangler whoami</code> 核對帳戶。開啟 Cloudflare Zero Trust Free 與 R2 Standard，若介面要求升級或有額外費用先停。建立<strong>獨立</strong>測試 Worker、D1 資料庫及 R2 桶，命名例如 <code>hsu-family-staging</code>。桶的 Public Development URL（<code>r2.dev</code>）、公開網域通通關閉。正式和測試不得共用 D1、R2 或 Access audience。</p>
 </li><li>

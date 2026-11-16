@@ -20,7 +20,11 @@ pnpm dev:cloudflare
 
 `check:cloudflare` 只建置 Vite 和檢查 Worker 打包。開啟 Wrangler 顯示的本機網址可查看網頁殼；私人 API 無驗簽設定回 503。沒有可部署的測試身分／驗簽後門。登入和照片的真實服務行為還須雲端驗證；本機測試不構成上線許可。
 
-### 建立隔離雲端驗收站
+### 目前進度與零額外扣款規則
+
+先看[這次實作紀錄與可重做步驟](cloudflare-staging.md)。目前只部署無路由的 Workers Free 與測試 D1；R2 已開通，但本入口網沒有建立桶，也沒有連接 R2 或 Images。下列完整驗收流程含**未獲執行許可的超額計費服務**，不是已完成的清單。零額外扣款是硬限制時，請勿執行其中 R2／Images 連接步驟。
+
+### 完整雲端驗收流程（目前只執行免費且已驗證的部分）
 
 1. 維運者先在 `frontend` 執行 `pnpm exec wrangler login` 完成瀏覽器授權，再用 `pnpm exec wrangler whoami` 核對帳戶。開啟 Cloudflare Zero Trust Free 與 R2 Standard，若介面要求升級或有額外費用先停。建立**獨立**測試 Worker、D1 資料庫及 R2 桶，命名例如 `hsu-family-staging`。桶的 Public Development URL（`r2.dev`）、公開網域通通關閉。正式和測試不得共用 D1、R2 或 Access audience。
 2. 在 `frontend` 複製 `wrangler.jsonc` 為受 Git 忽略的 `wrangler.staging.local.jsonc`。換成測試 Worker 名稱、D1 名稱、DB 網頁顯示的 UUID 與 R2 名稱；保留 `preview_urls: false`、`run_worker_first` 及 Images binding。第一次可用 `workers_dev: false` 和不設 `vars` 建立 Worker，不公開路由，API 仍拒絕。先執行本機驗證，再分別執行 `pnpm exec wrangler d1 migrations apply DB --remote --config wrangler.staging.local.jsonc`、`pnpm exec wrangler deploy --config wrangler.staging.local.jsonc`。核對終端目標是測試用資源；沒有 Access 前不放資料、不提供網址。
