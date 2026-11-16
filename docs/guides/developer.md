@@ -22,13 +22,13 @@ pnpm dev:cloudflare
 
 ### 目前進度與零額外扣款規則
 
-先看[這次實作紀錄與可重做步驟](cloudflare-staging.md)。目前只部署無路由的 Workers Free 與測試 D1；R2 已開通，但本入口網沒有建立桶，也沒有連接 R2 或 Images。下列完整驗收流程含**未獲執行許可的超額計費服務**，不是已完成的清單。零額外扣款是硬限制時，請勿執行其中 R2／Images 連接步驟。
+先看[這次實作紀錄與可重做步驟](cloudflare-staging.md)。Workers Free 與測試 D1 已有一個受 Zero Trust Free 保護的固定網址；只允許一個 Cloudflare 帳號，已驗證匿名進不去、管理員可讀取假資料。R2 已開通，但本入口網沒有建立桶，也沒有連接 R2 或 Images。下列完整驗收流程含**未獲執行許可的超額計費服務**，不是已完成的清單。零額外扣款是硬限制時，請勿執行其中 R2／Images 連接步驟。
 
 ### 完整雲端驗收流程（目前只執行免費且已驗證的部分）
 
 1. 維運者先在 `frontend` 執行 `pnpm exec wrangler login` 完成瀏覽器授權，再用 `pnpm exec wrangler whoami` 核對帳戶。開啟 Cloudflare Zero Trust Free 與 R2 Standard，若介面要求升級或有額外費用先停。建立**獨立**測試 Worker、D1 資料庫及 R2 桶，命名例如 `hsu-family-staging`。桶的 Public Development URL（`r2.dev`）、公開網域通通關閉。正式和測試不得共用 D1、R2 或 Access audience。
 2. 在 `frontend` 複製 `wrangler.jsonc` 為受 Git 忽略的 `wrangler.staging.local.jsonc`。換成測試 Worker 名稱、D1 名稱、DB 網頁顯示的 UUID 與 R2 名稱；保留 `preview_urls: false`、`run_worker_first` 及 Images binding。第一次可用 `workers_dev: false` 和不設 `vars` 建立 Worker，不公開路由，API 仍拒絕。先執行本機驗證，再分別執行 `pnpm exec wrangler d1 migrations apply DB --remote --config wrangler.staging.local.jsonc`、`pnpm exec wrangler deploy --config wrangler.staging.local.jsonc`。核對終端目標是測試用資源；沒有 Access 前不放資料、不提供網址。
-3. 在 Workers dashboard 的 Access 頁啟用正式 URL 保護（此處是**測試 Worker 的固定 URL**），用 [Email one-time PIN](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/one-time-pin/) 和逐一核准的測試信箱，不開 `Everyone`、`Bypass` 或服務權杖。若須先啟用 `workers.dev` 才能完成 Access 設定，先保留 API 未設定。確認無痕瀏覽需要登入後，在**測試設定檔**設定 `workers_dev: true`、保留 `preview_urls: false`，加入以下 `vars`，以實際應用替換示範值，重新部署後再確認一次未登入無法存取。
+3. 在測試 Worker 的 Access 頁選 `All traffic`，逐一核准測試信箱，不開 `Everyone`、`Bypass` 或服務權杖。目前測試站使用 Cloudflare 帳號；未來家人可評估使用 [Email one-time PIN](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/one-time-pin/)，變更登入方法後要重新驗證身分綁定。Access 政策先套用，再在**測試設定檔**啟用 `workers_dev: true`、保留 `preview_urls: false`，先部署不含 `vars` 的設定。確認無痕瀏覽需要登入後，加入以下 `vars`，以實際應用替換示範值，重新部署並再次確認未登入無法存取。
 
 ```json
 "vars": {

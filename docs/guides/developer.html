@@ -41,7 +41,7 @@ pnpm dev:cloudflare</pre>
 
 <h3>目前進度與零額外扣款規則<span><a href="#label-E7-9B-AE-E5-89-8D-E9-80-B2-E5-BA-A6-E8-88-87-E9-9B-B6-E9-A1-8D-E5-A4-96-E6-89-A3-E6-AC-BE-E8-A6-8F-E5-89-87">&para;</a> <a href="#top">&uarr;</a></span></h3>
 
-<p>先看<a href="cloudflare-staging.html">這次實作紀錄與可重做步驟</a>。目前只部署無路由的 Workers Free 與測試 D1；R2 已開通，但本入口網沒有建立桶，也沒有連接 R2 或 Images。下列完整驗收流程含<strong>未獲執行許可的超額計費服務</strong>，不是已完成的清單。零額外扣款是硬限制時，請勿執行其中 R2／Images 連接步驟。</p>
+<p>先看<a href="cloudflare-staging.html">這次實作紀錄與可重做步驟</a>。Workers Free 與測試 D1 已有一個受 Zero Trust Free 保護的固定網址；只允許一個 Cloudflare 帳號，已驗證匿名進不去、管理員可讀取假資料。R2 已開通，但本入口網沒有建立桶，也沒有連接 R2 或 Images。下列完整驗收流程含<strong>未獲執行許可的超額計費服務</strong>，不是已完成的清單。零額外扣款是硬限制時，請勿執行其中 R2／Images 連接步驟。</p>
 
 <h3>完整雲端驗收流程（目前只執行免費且已驗證的部分）<span><a href="#label-E5-AE-8C-E6-95-B4-E9-9B-B2-E7-AB-AF-E9-A9-97-E6-94-B6-E6-B5-81-E7-A8-8B-EF-BC-88-E7-9B-AE-E5-89-8D-E5-8F-AA-E5-9F-B7-E8-A1-8C-E5-85-8D-E8-B2-BB-E4-B8-94-E5-B7-B2-E9-A9-97-E8-AD-89-E7-9A-84-E9-83-A8-E5-88-86-EF-BC-89">&para;</a> <a href="#top">&uarr;</a></span></h3>
 <ol><li>
@@ -49,7 +49,7 @@ pnpm dev:cloudflare</pre>
 </li><li>
 <p>在 <code>frontend</code> 複製 <code>wrangler.jsonc</code> 為受 Git 忽略的 <code>wrangler.staging.local.jsonc</code>。換成測試 Worker 名稱、D1 名稱、DB 網頁顯示的 UUID 與 R2 名稱；保留 <code>preview_urls: false</code>、<code>run_worker_first</code> 及 Images binding。第一次可用 <code>workers_dev: false</code> 和不設 <code>vars</code> 建立 Worker，不公開路由，API 仍拒絕。先執行本機驗證，再分別執行 <code>pnpm exec wrangler d1 migrations apply DB --remote --config wrangler.staging.local.jsonc</code>、<code>pnpm exec wrangler deploy --config wrangler.staging.local.jsonc</code>。核對終端目標是測試用資源；沒有 Access 前不放資料、不提供網址。</p>
 </li><li>
-<p>在 Workers dashboard 的 Access 頁啟用正式 URL 保護（此處是<strong>測試 Worker 的固定 URL</strong>），用 <a href="https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/one-time-pin/">Email one-time PIN</a> 和逐一核准的測試信箱，不開 <code>Everyone</code>、<code>Bypass</code> 或服務權杖。若須先啟用 <code>workers.dev</code> 才能完成 Access 設定，先保留 API 未設定。確認無痕瀏覽需要登入後，在<strong>測試設定檔</strong>設定 <code>workers_dev: true</code>、保留 <code>preview_urls: false</code>，加入以下 <code>vars</code>，以實際應用替換示範值，重新部署後再確認一次未登入無法存取。</p>
+<p>在測試 Worker 的 Access 頁選 <code>All traffic</code>，逐一核准測試信箱，不開 <code>Everyone</code>、<code>Bypass</code> 或服務權杖。目前測試站使用 Cloudflare 帳號；未來家人可評估使用 {Email one-time PIN}[https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/one-time-pin/]，變更登入方法後要重新驗證身分綁定。Access 政策先套用，再在<strong>測試設定檔</strong>啟用 <code>workers_dev: true</code>、保留 <code>preview_urls: false</code>，先部署不含 <code>vars</code> 的設定。確認無痕瀏覽需要登入後，加入以下 <code>vars</code>，以實際應用替換示範值，重新部署並再次確認未登入無法存取。</p>
 </li></ol>
 
 <pre>&quot;vars&quot;: {

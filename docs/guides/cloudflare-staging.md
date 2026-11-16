@@ -4,7 +4,7 @@
 
 ## 結論先看
 
-已把 React＋Vite 的測試版本上傳到 Cloudflare，但沒有開啟對外網址。測試資料庫 D1 能備份並還原；目前只有一筆假拜拜規則和一個停用的示例帳號。正式網站、MongoDB 和既有照片未動。現在不用重做登入、建立資料庫，也不要為了讓測試站上線按「Upgrade」。
+[開啟 Cloudflare 私人測試站](https://hsu-family-staging.helloapple080.workers.dev/) → 按 **Cloudflare** → 使用原本的 Cloudflare 帳號。沒有另設網站密碼，這個測試站目前不寄一次性登入碼，也不開放家人註冊。只有持有人的信箱能登入，測試資料只有一筆假的拜拜規則。請勿輸入正式資料或照片；正式網站、MongoDB、既有照片未動。
 
 ## 實際做了什麼
 
@@ -19,6 +19,9 @@
 9. **查 US$0 是否能止扣。** Cloudflare 的「Spending limit」可停止 Workers 或 Durable Objects 的部分作業，必須填大於 US$0，且不涵蓋 R2；「Budget alert」只寄通知，不停止用量。不設定無法達成目的的警報，也不升級方案。重新乾跑測試站，確認只有測試 D1 綁定，沒有 R2、Images、公開路由或排程。
 10. **準備免費登入、停在最後一頁。** 在 Zero Trust 按「Get started」，選擇 Free，進到「Activate Zero Trust Free」。畫面顯示應付 US$0／月，但另列有超出免費額度可向卡片扣款的授權。我沒有勾選同意，也沒有按啟用。測試站仍未開放網址。
 11. **核對帳戶實際設定。** 到 Billing → Spend limits，頁面只列 Workers 與 Durable Objects，兩者目前都是 Free tier；沒有 R2、Zero Trust 或帳戶總額的止扣設定。Billable usage 當期顯示 US$0.00，已有一個 US$10 的 Budget alert。這是既有通知門檻，不是扣款上限；未更動警報、付款授權或方案。
+12. **確認帳戶持有人啟用免費登入服務。** Zero Trust 後台顯示 `Zero Trust Free`。持有人指定先只用自己的 Cloudflare 登入信箱。用 `Allow → Include → Emails` 建立 `hsu-family-staging-owner` 政策，只放一個精確比對的信箱，不使用網域、`Everyone` 或 `Bypass`。
+13. **先加鎖，再開測試網址。** 在測試 Worker 的 Access 頁把上述政策套用到 `All traffic`，再啟用其固定 `workers.dev` 網址，預覽網址仍關閉。未登入的首頁與 API 都回 `302` 並導向 Access。確認保護生效後，才在測試 D1 新增一位管理員，填入測試專屬的簽發者、應用 AUD 及來源網址，再部署一次。部署清單只有 D1 和三個驗證設定，沒有 R2 或 Images 綁定。
+14. **在雲端實測兩條登入路徑。** 無登入首頁、身分 API、拜拜 API、偽造 Access 標頭與未登入的跨站 POST 都被 Access 擋下，回 `302`，沒有傳回資料。原本已登入的 Cloudflare 帳號點「Cloudflare」後可進站；畫面顯示「管理員」，D1 確認只有一位啟用且已綁定身分的管理員，另一個示例帳號仍停用。相同假規則「農曆八月十五」在 2026 顯示 `2026-09-25`，2036 顯示 `2036-10-04`；資料庫仍有一筆假規則、零張照片。
 
 ## 怎麼重做（維運者）
 
@@ -61,9 +64,16 @@ shasum -a 256 "$audit_dir/backup.sql"
 
 預期第一條檢查印出 `ok`，外鍵無錯誤。第二條檢查在這份測試資料為 `1|1|0`。備份本身不進 Git 或 Obsidian。
 
+### 重做登入與固定網址
+
+1. 在 Zero Trust → Access controls → Policies 新增可重用政策。動作 `Allow`，條件 `Include → Emails`，只加入核准的測試信箱；在測試 Worker → Access 選 `All traffic`，套用該政策。
+2. 在測試設定啟用 `workers_dev: true`，保留 `preview_urls: false`，先不放 `vars`。部署後，用無登入瀏覽器或 `curl -I` 確認首頁與 `/api/hosted/auth/me` 導向正確的 Access 登入頁。如果沒有被擋，立刻關回 `workers_dev`，修好再繼續。
+3. 維運者只在測試 D1 新增核准信箱的 `Admin`，不用猜測或預填 Access subject。從測試 Worker → Access 取得 AUD 與 JWKS；JWKS URL 的來源即簽發者。依[開發者手冊](developer.md)設定 `ACCESS_AUDIENCE`、`ACCESS_ISSUER`、`PORTAL_ORIGIN`，重新部署並重做匿名檢查。第一次成功登入後核對 `portal_access` 角色、啟用、身分綁定狀態；不要把信箱或設定值放進文件和 Git。
+4. **要關閉測試站：** 先把 `workers_dev` 關回 `false`，維持 `preview_urls: false`，重新部署，再確認固定網址不可用。若只撤銷某個帳號，先把測試 D1 的該帳號 `active` 設為 `0`，再從 Access 政策移除其信箱；還有有效的 Access 工作階段時，D1 的停用仍會拒絕 API。不要刪除正式服務或原始資料。
+
 ## 費用與下一個門檻
 
 - [Workers Free](https://developers.cloudflare.com/workers/platform/limits/) 和 [D1 Free](https://developers.cloudflare.com/d1/platform/pricing/) 有用量上限；保留 Free，避免超量時切換付費方案。不要為試站購買網域。
 - [R2 Standard](https://developers.cloudflare.com/r2/pricing/#free-tier) 有免費用量，帳戶總用量超額會計費。[Cloudflare 支出控制說明](https://developers.cloudflare.com/billing/manage/spend-management/) 指出真正的止扣上限不涵蓋 R2，也不保證帳單上限；[預算警報](https://developers.cloudflare.com/billing/manage/budget-alerts/) 只寄通知。要求零額外扣款時不連接 R2；若帳戶只為此專案開通 R2、又不打算用，可由帳戶持有人在帳單頁檢查及取消訂閱，切勿刪除其他用途的資源。
-- Zero Trust Free 的「今天 US$0」是方案價格，不是帳戶零元止扣設定。即使[官方開通說明](https://developers.cloudflare.com/cloudflare-one/setup/) 指出 Free 方案本身不收費，仍要看你的結帳條件。如果不接受超額扣款授權，請勿按啟用；維持私人測試站無網址，可先用[唯讀假資料展示](https://helloapple080.github.io/HsuFamily/)或本機驗證。如果帳戶持有人親自接受並啟用，仍只會先用少數測試信箱驗收 Access、來源與唯讀角色，不開 R2、沒有正式資料，也不升級。
-- 若接受保留免費方案及低用量，但不要求帳單硬上限，建議測試先只允許兩個測試帳號、不加購席次或開付費附加功能。[官方席次說明](https://developers.cloudflare.com/cloudflare-one/team-and-resources/users/seat-management/) 指出席次用完會拒絕新的登入；這只限制席次，不能代替整個帳戶的支出上限。
+- Zero Trust Free 的「今天 US$0」是方案價格，不是帳戶零元止扣設定。[官方開通說明](https://developers.cloudflare.com/cloudflare-one/setup/) 與[官方席次說明](https://developers.cloudflare.com/cloudflare-one/team-and-resources/users/seat-management/)可核對方案與登入上限。本次僅用一席測試，沒有升級或加購；不接受額外計費服務時，維持 R2 和 Images 未連接。
+- **還不能切正式站。** 未使用第二個真實信箱驗證未白名單與唯讀家人，未實測撤權和已登入的跨站寫入，也沒有雲端照片上傳／備份與正式資料搬移。這些不能用本機測試或已通過的匿名檢查代替。需要操作公開版時，仍可用[唯讀假資料展示](https://helloapple080.github.io/HsuFamily/)。
