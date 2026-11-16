@@ -18,6 +18,7 @@
 8. **查下一步、不提交結帳。** Zero Trust 後台仍顯示「Welcome」和「Get started」，尚未建立組織。本次只查看，沒有開通方案或放行網址。
 9. **查 US$0 是否能止扣。** Cloudflare 的「Spending limit」可停止 Workers 或 Durable Objects 的部分作業，必須填大於 US$0，且不涵蓋 R2；「Budget alert」只寄通知，不停止用量。不設定無法達成目的的警報，也不升級方案。重新乾跑測試站，確認只有測試 D1 綁定，沒有 R2、Images、公開路由或排程。
 10. **準備免費登入、停在最後一頁。** 在 Zero Trust 按「Get started」，選擇 Free，進到「Activate Zero Trust Free」。畫面顯示應付 US$0／月，但另列有超出免費額度可向卡片扣款的授權。我沒有勾選同意，也沒有按啟用。測試站仍未開放網址。
+11. **核對帳戶實際設定。** 到 Billing → Spend limits，頁面只列 Workers 與 Durable Objects，兩者目前都是 Free tier；沒有 R2、Zero Trust 或帳戶總額的止扣設定。Billable usage 當期顯示 US$0.00，已有一個 US$10 的 Budget alert。這是既有通知門檻，不是扣款上限；未更動警報、付款授權或方案。
 
 ## 怎麼重做（維運者）
 
@@ -65,3 +66,4 @@ shasum -a 256 "$audit_dir/backup.sql"
 - [Workers Free](https://developers.cloudflare.com/workers/platform/limits/) 和 [D1 Free](https://developers.cloudflare.com/d1/platform/pricing/) 有用量上限；保留 Free，避免超量時切換付費方案。不要為試站購買網域。
 - [R2 Standard](https://developers.cloudflare.com/r2/pricing/#free-tier) 有免費用量，帳戶總用量超額會計費。[Cloudflare 支出控制說明](https://developers.cloudflare.com/billing/manage/spend-management/) 指出真正的止扣上限不涵蓋 R2，也不保證帳單上限；[預算警報](https://developers.cloudflare.com/billing/manage/budget-alerts/) 只寄通知。要求零額外扣款時不連接 R2；若帳戶只為此專案開通 R2、又不打算用，可由帳戶持有人在帳單頁檢查及取消訂閱，切勿刪除其他用途的資源。
 - Zero Trust Free 的「今天 US$0」是方案價格，不是帳戶零元止扣設定。即使[官方開通說明](https://developers.cloudflare.com/cloudflare-one/setup/) 指出 Free 方案本身不收費，仍要看你的結帳條件。如果不接受超額扣款授權，請勿按啟用；維持私人測試站無網址，可先用[唯讀假資料展示](https://helloapple080.github.io/HsuFamily/)或本機驗證。如果帳戶持有人親自接受並啟用，仍只會先用少數測試信箱驗收 Access、來源與唯讀角色，不開 R2、沒有正式資料，也不升級。
+- 若接受保留免費方案及低用量，但不要求帳單硬上限，建議測試先只允許兩個測試帳號、不加購席次或開付費附加功能。[官方席次說明](https://developers.cloudflare.com/cloudflare-one/team-and-resources/users/seat-management/) 指出席次用完會拒絕新的登入；這只限制席次，不能代替整個帳戶的支出上限。
