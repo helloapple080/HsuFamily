@@ -88,7 +88,7 @@ export function ItineraryDialog({ itinerary, children }: ItineraryDialogProps) {
       setOpen(nextOpen)
     }}>
       <DialogTrigger render={children} />
-      <DialogContent className="glass-panel-strong sm:max-w-[425px]">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain glass-panel-strong sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>{itinerary ? '編輯歷年行程' : '新增歷年行程'}</DialogTitle>
           <DialogDescription>記錄行程日期、地點與心得。</DialogDescription>

@@ -39,6 +39,15 @@ pnpm dev:cloudflare</pre>
 
 <p><code>check:cloudflare</code> 只建置 Vite 和檢查 Worker 打包。開啟 Wrangler 顯示的本機網址可查看網頁殼；私人 API 無驗簽設定回 503。沒有可部署的測試身分／驗簽後門。登入和照片的真實服務行為還須雲端驗證；本機測試不構成上線許可。</p>
 
+<h3>響應式版面與回歸驗收<span><a href="#label-E9-9F-BF-E6-87-89-E5-BC-8F-E7-89-88-E9-9D-A2-E8-88-87-E5-9B-9E-E6-AD-B8-E9-A9-97-E6-94-B6">&para;</a> <a href="#top">&uarr;</a></span></h3>
+<ul><li>
+<p><code>frontend/spa/index.html</code> 設定手機視窗；共用 <code>PortalLayout</code> 以 <code>md</code> 斷點切換手機上方選單和桌面側欄。活動月曆保留七欄、只允許月曆區左右捲，不應讓整頁橫向捲動。</p>
+</li><li>
+<p>在隔離站使用已核准帳號，以 320×568、390×844 的 CSS 視窗尺寸檢查主要頁面與選單，實際換月、搜尋並開啟表單；比較整頁捲動寬度與視窗內容寬度。Safari／Chrome 真機另外測斷點、觸控、地址列、鍵盤遮擋及回到上一頁。</p>
+</li><li>
+<p>行程表單回歸：把視窗切到 568×320，選「歷年行程 → 新增行程」。表單外框須留在視窗內，表單應可獨立上下捲到取消與儲存。空表單按「儲存」只顯示必填錯誤，不新增資料；再按「取消」應可關閉。舊版外框約 <code>-97</code> 到 <code>417</code> px，不可捲；修正版約 <code>16</code> 到 <code>304</code> px，可捲。修正在 <code>features/itineraries/ItineraryDialog</code>，未改共用 shadcn/ui 元件、API 或角色。</p>
+</li></ul>
+
 <h3>目前進度與零額外扣款規則<span><a href="#label-E7-9B-AE-E5-89-8D-E9-80-B2-E5-BA-A6-E8-88-87-E9-9B-B6-E9-A1-8D-E5-A4-96-E6-89-A3-E6-AC-BE-E8-A6-8F-E5-89-87">&para;</a> <a href="#top">&uarr;</a></span></h3>
 
 <p>先看<a href="cloudflare-staging.html">這次實作紀錄與可重做步驟</a>。Workers Free 與測試 D1 已有一個受 Zero Trust Free 保護的固定網址；只允許一個 Cloudflare 帳號，已驗證匿名進不去、管理員可讀取假資料。R2 已開通，但本入口網沒有建立桶，也沒有連接 R2 或 Images。下列完整驗收流程含<strong>未獲執行許可的超額計費服務</strong>，不是已完成的清單。零額外扣款是硬限制時，請勿執行其中 R2／Images 連接步驟。</p>

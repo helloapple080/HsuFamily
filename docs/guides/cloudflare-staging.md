@@ -1,6 +1,6 @@
 # 許氏入口網 Cloudflare 測試站：操作紀錄與零扣款檢查
 
-2026-11-16（台北時間） · 測試程式版本 `a2c2761` · [開發者手冊](developer.md) · [家人手冊](user.md)
+2026-11-16（台北時間） · 測試站初版 `a2c2761` · [開發者手冊](developer.md) · [家人手冊](user.md)
 
 ## 結論先看
 
@@ -22,6 +22,7 @@
 12. **確認帳戶持有人啟用免費登入服務。** Zero Trust 後台顯示 `Zero Trust Free`。持有人指定先只用自己的 Cloudflare 登入信箱。用 `Allow → Include → Emails` 建立 `hsu-family-staging-owner` 政策，只放一個精確比對的信箱，不使用網域、`Everyone` 或 `Bypass`。
 13. **先加鎖，再開測試網址。** 在測試 Worker 的 Access 頁把上述政策套用到 `All traffic`，再啟用其固定 `workers.dev` 網址，預覽網址仍關閉。未登入的首頁與 API 都回 `302` 並導向 Access。確認保護生效後，才在測試 D1 新增一位管理員，填入測試專屬的簽發者、應用 AUD 及來源網址，再部署一次。部署清單只有 D1 和三個驗證設定，沒有 R2 或 Images 綁定。
 14. **在雲端實測兩條登入路徑。** 無登入首頁、身分 API、拜拜 API、偽造 Access 標頭與未登入的跨站 POST 都被 Access 擋下，回 `302`，沒有傳回資料。原本已登入的 Cloudflare 帳號點「Cloudflare」後可進站；畫面顯示「管理員」，D1 確認只有一位啟用且已綁定身分的管理員，另一個示例帳號仍停用。相同假規則「農曆八月十五」在 2026 顯示 `2026-09-25`，2036 顯示 `2036-10-04`；資料庫仍有一筆假規則、零張照片。
+15. **模擬手機驗收並修正矮螢幕。** 用 Chrome 的 390×844、320×568 直式視窗檢查選單、拜拜日期、活動月曆換月、成員及行程。月曆只有格子內左右捲；整頁不會橫向捲。568×320 橫式發現新增行程表單超出畫面，修正為表單內可上下捲。Lint、型別、148 項測試和打包通過；只部署到隔離 Worker，重跑原尺寸並確認空白儲存會提示必填、取消可按，沒有新增資料。這是瀏覽器尺寸模擬，不等於 iPhone 或 Android 實機驗收。
 
 ## 怎麼重做（維運者）
 
@@ -77,3 +78,4 @@ shasum -a 256 "$audit_dir/backup.sql"
 - [R2 Standard](https://developers.cloudflare.com/r2/pricing/#free-tier) 有免費用量，帳戶總用量超額會計費。[Cloudflare 支出控制說明](https://developers.cloudflare.com/billing/manage/spend-management/) 指出真正的止扣上限不涵蓋 R2，也不保證帳單上限；[預算警報](https://developers.cloudflare.com/billing/manage/budget-alerts/) 只寄通知。要求零額外扣款時不連接 R2；若帳戶只為此專案開通 R2、又不打算用，可由帳戶持有人在帳單頁檢查及取消訂閱，切勿刪除其他用途的資源。
 - Zero Trust Free 的「今天 US$0」是方案價格，不是帳戶零元止扣設定。[官方開通說明](https://developers.cloudflare.com/cloudflare-one/setup/) 與[官方席次說明](https://developers.cloudflare.com/cloudflare-one/team-and-resources/users/seat-management/)可核對方案與登入上限。本次僅用一席測試，沒有升級或加購；不接受額外計費服務時，維持 R2 和 Images 未連接。
 - **還不能切正式站。** 未使用第二個真實信箱驗證未白名單與唯讀家人，未實測撤權和已登入的跨站寫入，也沒有雲端照片上傳／備份與正式資料搬移。這些不能用本機測試或已通過的匿名檢查代替。需要操作公開版時，仍可用[唯讀假資料展示](https://helloapple080.github.io/HsuFamily/)。
+- **下一步：** 用真手機登入隔離站，只看假資料，確認選單、月曆左右滑與鍵盤開啟後的表單。第二位測試者的信箱尚未核准，白名單維持單人；之後有核准帳號再驗證唯讀與撤權。費用限制維持不開 R2／Images、不搬正式資料、不切換正式站。
