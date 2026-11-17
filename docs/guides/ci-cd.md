@@ -61,6 +61,8 @@ gh run watch 123456789 --compact --exit-status
 
 **紅燈怎麼辦：** 打開失敗的工作，先讀第一個失敗步驟。Lint／Test 紅燈，在本機跑同名指令重現；依賴稽核／Trivy 紅燈先確認套件或檔案，不要降低嚴重度門檻；Pages 紅燈先重跑 `pnpm build:pages && pnpm test:pages`，不要略過靜態檔驗證。如果只是網路或 runner 暫時錯誤，在同一執行頁選 **Re-run failed jobs**，或執行 `gh run rerun 123456789 --failed`。程式有問題則修好、提交新 SHA 再推，不要部署失敗或取消的版本。
 
+**CI 版本維護（2026-11-17）：** 兩個 CI 工作都固定使用 `ubuntu-26.04`，避免隨 [GitHub 的 `ubuntu-latest` 別名](https://github.com/actions/runner-images/issues/14748) 切換作業系統版本。`Upload SBOM` 更新到 [GitHub 官方 `upload-artifact` v7.0.2](https://github.com/actions/upload-artifact/releases/tag/v7.0.2)，以完整提交 SHA 固定；這個動作使用 Node.js 24，專案的建置仍用 Node.js 22。後續更新時，在工作分支推送，確認兩個 CI 工作通過，並下載該次的 `sbom-cyclonedx`，核對壓縮檔內有 `sbom.cdx.json`。不需要部署 Worker，也不影響 Pages 或 CodeQL 的設定。
+
 目前 `main` 未啟用強制通過檢查的分支規則；上面的綠燈是維運者必須手動把關的條件，GitHub 不會替你阻擋所有不合規合併。要變更合併規則時先核對實際回報的檢查名稱，並另外驗證 Pages 發布。
 
 這是公開儲存庫，現有工作使用 GitHub 標準代管 runner，依 [GitHub Actions 計費說明](https://docs.github.com/en/billing/concepts/product-billing/github-actions)不收這類運算分鐘費。不要改用較大型付費 runner，也不要把資料或憑證放到公開日誌、產物或分支。
