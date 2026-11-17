@@ -67,7 +67,7 @@ gh run watch 123456789 --compact --exit-status
 
 ## 4. 私人測試站更新：只部署 CI 已通過的同一個 SHA
 
-以下只適用於**已建立及保護的** `hsu-family-staging`。首次建立、設定 Access、確認 Free 方案，請照 [Cloudflare 實作紀錄](cloudflare-staging.md)；如果沒有 `wrangler.staging.local.jsonc` 或不是該帳戶，先停，不可改用共用 `wrangler.jsonc` 執行遠端部署。本節只有第 3 步會發布新程式，不會變更 D1 資料。
+以下只適用於**已建立及保護的** `hsu-family-staging`。首次建立、設定 Access、確認 Free 方案，請照 [Cloudflare 實作紀錄](cloudflare-staging.md)；如果沒有 `wrangler.staging.local.jsonc` 或不是該帳戶，先停，不可改用共用 `wrangler.jsonc` 執行遠端部署。本節只有第 3 步會發布新程式；發布命令不會變更 D1 資料，只有下方的編輯演練會暫時修改一筆假資料。
 
 1. 從乾淨工作樹確認 `git rev-parse HEAD` 是 Actions 綠燈的同一個 SHA。在 `frontend` 執行前置檢查；`whoami` 若未登入，才執行 `pnpm exec wrangler login`，由帳戶持有人在瀏覽器授權，再重跑。
 
@@ -99,6 +99,13 @@ curl -sS --max-time 15 -o /dev/null -w '%{http_code}\n' "$stage_url/api/hosted/a
 
 5. 白名單管理員登入，確認身分正確、假拜拜規則可讀；依改動測行事曆、行程或手機表單。記下「日期／Git SHA／CI 連結／前後 Worker 版本／測試結果／仍未驗收項目」。不要把雲端登入、角色或照片驗收用 CI 綠燈帶過。
 
+### 有改儲存或版本控制時：驗證舊編輯不會蓋掉新資料
+
+1. 用同一位白名單管理員，在兩個頁籤開啟隔離站。先記下「假資料：還原演練」的原始備註，兩頁都按這筆的「編輯」。若找不到這筆假規則，停止演練，不要改用真實資料。
+2. 兩頁各填不同備註（例如「驗收 A」、「驗收 B」）。先在 A 頁籤按「儲存規則」，確認清單顯示 A。接著在**未重新整理**的 B 頁籤儲存。
+3. B 應看到「其他人已更新這筆資料」的衝突提示（HTTP `409`），表單保留 B 的草稿。重新整理 B 頁面後，清單應只看到 A，沒有 B。若要保留 B 草稿，請先複製再重新整理。
+4. 在已重新整理的頁籤，用表單把備註改回原值，再重新開啟編輯核對。這是一次正常儲存，版本會再增加；不用手動下調版本。若看到不是這次演練寫入的內容，停止，不要覆蓋。這只驗證同筆資料的寫入衝突，不代替兩個帳號的權限驗收。
+
 每次發布可直接複製這份紀錄格式（不放信箱、權杖或資料庫內容）：
 
 ```text
@@ -126,5 +133,7 @@ pnpm exec wrangler rollback PREVIOUS_VERSION_ID --config wrangler.staging.local.
 ## 6. 本次核對與下一個驗收點
 
 2026-11-17（台北時間）：工作分支 `516fb08` 的 [CI](https://github.com/helloapple080/HsuFamily/actions/runs/43899310996) 已通過；公開展示的 [`main` 發布](https://github.com/helloapple080/HsuFamily/actions/runs/30146143974)及 [CodeQL 排程](https://github.com/helloapple080/HsuFamily/actions/runs/42736931107) 取自另一個提交 `bbe6168`，不算工作分支的 CodeQL 結果。重新驗證公開首頁 `200`／私人路徑 `404`、Cloudflare 匿名首頁／身分／拜拜 API `302`；測試 Worker 單一版本承接 100% 流量，D1 沒有待套遷移。本次文件更新不需要重新發布 Worker。
+
+同日隔離站實測：A 儲存後 D1 版本 `1 → 2`；B 被拒、草稿留在表單，D1 仍是版本 `2` 且保留 A。重新整理可見 A，還原空白備註後 D1 版本為 `3`。仍是一筆假規則、零張照片，白名單未變。
 
 下一步仍是實機手機與第二個經本人核准的帳號，驗證唯讀、拒寫與撤權；白名單未擴大前，不會把這些標成通過。照片另作決策：硬性避免超額扣款時，不接 R2／Images；若照片優先且能用 Supabase Free 的 1 GB，再獨立驗證既有回退版，不直接搬正式資料。
