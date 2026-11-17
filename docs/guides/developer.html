@@ -17,15 +17,17 @@
   </style>
 </head>
 <body>
-  <nav aria-label="手冊切換"><a href="user.html">家人使用</a> · <a href="developer.html">開發與部署</a> · <a href="cloudflare-staging.html">Cloudflare 實作紀錄</a></nav>
+  <nav aria-label="手冊切換"><a href="user.html">家人使用</a> · <a href="developer.html">開發與部署</a> · <a href="cloudflare-staging.html">Cloudflare 實作紀錄</a> · <a href="ci-cd.html">CI/CD</a></nav>
   <main>
 <h1>許氏入口網開發與部署手冊<span><a href="#label-E8-A8-B1-E6-B0-8F-E5-85-A5-E5-8F-A3-E7-B6-B2-E9-96-8B-E7-99-BC-E8-88-87-E9-83-A8-E7-BD-B2-E6-89-8B-E5-86-8A">&para;</a> <a href="#top">&uarr;</a></span></h1>
 
-<p><a href="user.html">切換至使用者手冊</a> · <a href="developer.html">瀏覽器版</a></p>
+<p><a href="user.html">切換至使用者手冊</a> · <a href="ci-cd.html">CI/CD 照做手冊</a> · <a href="developer.html">瀏覽器版</a></p>
 
 <h2>私人入口網：Cloudflare／React＋Vite<span><a href="#label-E7-A7-81-E4-BA-BA-E5-85-A5-E5-8F-A3-E7-B6-B2-EF-BC-9ACloudflare-EF-BC-8FReact-EF-BC-8BVite">&para;</a> <a href="#top">&uarr;</a></span></h2>
 
 <p>新入口網沿用 React 介面，部署到 <code>workers.dev</code> 可不買網域、不架家用主機。<code>frontend/spa</code> 組裝 React，<code>frontend/src/components/features</code>、<code>hooks</code> 和領域契約供兩個入口共享；<code>frontend/edge</code> 集中驗證 Access、同源及角色後，再存取 D1 和私人 R2。Cloudflare 沒有 PostgreSQL RLS：D1 只透過 Worker binding 存取，不對外公開。讀取與重新開啟頁面用共用資料；管理員編輯或刪除時用版本比對，防止兩人互蓋。這不是即時推播。</p>
+
+<p>要送出改動、看 GitHub Actions、發布展示版或更新隔離站，請照 <a href="ci-cd.html">CI/CD 照做手冊</a>：工作分支是自動檢查，公開展示由 <code>main</code> 發布，私人站在 CI 綠燈後由維運者手動部署。首次建立環境才使用下面的設定步驟，日常更新不需要重新建庫或放寬白名單。</p>
 
 <h3>本機測試（不登入、不部署）<span><a href="#label-E6-9C-AC-E6-A9-9F-E6-B8-AC-E8-A9-A6-EF-BC-88-E4-B8-8D-E7-99-BB-E5-85-A5-E3-80-81-E4-B8-8D-E9-83-A8-E7-BD-B2-EF-BC-89">&para;</a> <a href="#top">&uarr;</a></span></h3>
 

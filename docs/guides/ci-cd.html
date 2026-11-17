@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>許氏入口網 CI/CD：從改程式、檢查到部署與回復</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, "PingFang TC", sans-serif; }
+    body { max-width: 48rem; margin: auto; padding: 2rem 1.25rem 4rem; line-height: 1.75; }
+    h1, h2 { line-height: 1.3; }
+    h2 { margin-top: 2rem; border-top: 1px solid GrayText; padding-top: 1rem; }
+    a { text-underline-offset: .2em; }
+    pre { overflow-x: auto; padding: 1rem; border: 1px solid GrayText; border-radius: .5rem; }
+    code, tt { overflow-wrap: anywhere; }
+    li + li { margin-top: .35rem; }
+    @media print { nav { display: none; } pre { white-space: pre-wrap; } h2 { break-after: avoid; } }
+  </style>
+</head>
+<body>
+  <nav aria-label="手冊切換"><a href="user.html">家人使用</a> · <a href="developer.html">開發與部署</a> · <a href="cloudflare-staging.html">Cloudflare 實作紀錄</a> · <a href="ci-cd.html">CI/CD</a></nav>
+  <main>
+<h1>許氏入口網 CI/CD：從改程式、檢查到部署與回復<span><a href="#label-E8-A8-B1-E6-B0-8F-E5-85-A5-E5-8F-A3-E7-B6-B2+CI-2FCD-EF-BC-9A-E5-BE-9E-E6-94-B9-E7-A8-8B-E5-BC-8F-E3-80-81-E6-AA-A2-E6-9F-A5-E5-88-B0-E9-83-A8-E7-BD-B2-E8-88-87-E5-9B-9E-E5-BE-A9">&para;</a> <a href="#top">&uarr;</a></span></h1>
+
+<p><a href="developer.html">開發者手冊</a> · <a href="user.html">家人使用手冊</a> · <a href="cloudflare-staging.html">Cloudflare 實作紀錄</a> · <a href="ci-cd.html">瀏覽器版</a></p>
+
+<p>CI 是「送出程式後自動檢查」；CD 是「把通過檢查的版本交付到網站」。<strong>在這個專案，CI 綠燈不等於私人站已更新。</strong> 目前保留 Cloudflare Workers Free＋Access＋D1；不新增部署權杖、不接 R2／Images、不切換正式站。Vercel／Supabase 只保留作回退評估，不是這條發布流程；Resend 和自訂網域目前不用。</p>
+
+<h2>1. 先認清三個目的地<span><a href="#label-1.+-E5-85-88-E8-AA-8D-E6-B8-85-E4-B8-89-E5-80-8B-E7-9B-AE-E7-9A-84-E5-9C-B0">&para;</a> <a href="#top">&uarr;</a></span></h2>
+<ol><li>
+<p><strong>工作分支 <code>codex/cloudflare-react</code>：</strong> 推送會跑程式檢查，不會發布公開展示或私人站。程式和本文以這個分支為準，<code>main</code> 不是同一個版本。</p>
+</li><li>
+<p><strong>公開 <a href="https://helloapple080.github.io/HsuFamily/">GitHub Pages 展示站</a>：</strong> 對 <code>main</code> 送出 PR 會組建及檢查展示；只有程式推到 <code>main</code> 且組建成功，才自動部署。永遠只放虛構資料、唯讀、不含登入或私人 API。不要為了更新私人測試站推送 <code>main</code>。</p>
+</li><li>
+<p><strong>私人 <a href="https://hsu-family-staging.helloapple080.workers.dev/">Cloudflare 測試站</a>：</strong> 維運者確認 CI 綠燈後，用本機 Wrangler 手動發布；Access 白名單、D1、Worker 都是測試專用。沒有 GitHub → Cloudflare 自動部署，也沒有正式切換。</p>
+</li></ol>
+
+<h2>2. 第一次準備與日常開發<span><a href="#label-2.+-E7-AC-AC-E4-B8-80-E6-AC-A1-E6-BA-96-E5-82-99-E8-88-87-E6-97-A5-E5-B8-B8-E9-96-8B-E7-99-BC">&para;</a> <a href="#top">&uarr;</a></span></h2>
+
+<p>準備 Git、Node.js 22、pnpm 10.33.0；GitHub CLI 是選用工具，不裝也能從 GitHub 的 Actions 頁操作。已在專案資料夾就跳過 <code>git clone</code>。切分支前先看 <code>git status</code>，有自己的未提交變更先保留；不要用強制覆寫。</p>
+
+<pre>git clone https://github.com/helloapple080/HsuFamily.git
+cd HsuFamily
+git switch codex/cloudflare-react
+git pull --ff-only
+node --version
+pnpm --version</pre>
+
+<p>若 <code>pnpm --version</code> 不是 <code>10.33.0</code>，請先用已安裝的 Corepack 啟用對應版本，或從 <code>frontend</code> 開一個臨時 shell，把固定版本放在 PATH 前面：<code>npx --yes --package=pnpm@10.33.0 -c &#39;zsh&#39;</code>（沒有 zsh 可改 <code>sh</code>）；在該 shell 重查版本後再繼續。不要直接允許其他 pnpm 版本清掉現有 <code>node_modules</code>，也不要為了解決版本錯誤而改鎖檔。</p>
+
+<p>在 <code>frontend</code> 執行：</p>
+
+<pre>pnpm install --frozen-lockfile --ignore-scripts
+pnpm audit:prod
+pnpm lint
+pnpm test
+pnpm check:cloudflare
+pnpm build
+pnpm test:csp
+pnpm build:pages &amp;&amp; pnpm test:pages</pre>
+
+<p>每行都應成功才繼續。<code>check:cloudflare</code> 只在本機產生 Vite 檔案及檢查 Worker 打包，不會部署；<code>build</code> 是檢查 Next.js 回退版，<code>build:pages</code> 則產生唯讀展示。若只改文件，專案根目錄另跑 <code>ruby docs/guides/render.rb</code>、<code>ruby docs/guides/render.rb --check</code>、<code>git diff --check</code>，Markdown 與對應 HTML 要一起提交。</p>
+
+<p>改完用 <code>git status</code>、<code>git diff</code> 確認只有這次的檔案，再用 <code>git add &lt;這次修改的實際檔案&gt;</code>、英文 Conventional Commit 訊息提交，最後執行 <code>git push origin codex/cloudflare-react</code>。不要加入 <code>.env</code>、<code>wrangler.staging.local.jsonc</code>、權杖、D1 匯出、驗證碼、信箱或原始照片。新開的一般工作分支不在 CI 的推送名單裡；若要走 PR 檢查，先核對目標為 <code>main</code>，但不要未經驗收就合併。</p>
+
+<h2>3. 在 GitHub 看結果與排除失敗<span><a href="#label-3.+-E5-9C-A8+GitHub+-E7-9C-8B-E7-B5-90-E6-9E-9C-E8-88-87-E6-8E-92-E9-99-A4-E5-A4-B1-E6-95-97">&para;</a> <a href="#top">&uarr;</a></span></h2>
+
+<p>打開 <a href="https://github.com/helloapple080/HsuFamily/actions/workflows/ci.yml">Actions → CI</a>，用分支選 <code>codex/cloudflare-react</code>，點最新一筆，對照頁面上的提交 SHA 是否等於 <code>git rev-parse HEAD</code>。應看到 <code>Frontend</code>、<code>Supply Chain</code> 都綠燈。也可在已登入 <code>gh</code> 的專案根目錄執行：</p>
+
+<pre>gh run list --workflow ci.yml --branch codex/cloudflare-react --commit &quot;$(git rev-parse HEAD)&quot; --limit 5
+# 把下方 123456789 換成上一行對應的執行編號；不是提交 SHA。
+gh run watch 123456789 --compact --exit-status</pre>
+
+<p><strong>目前工作分支內有哪些自動化：</strong></p>
+<ul><li>
+<p><code>.github/workflows/ci.yml</code>：推送 <code>main</code>、<code>codex/supabase-portal</code>、<code>codex/cloudflare-react</code>，或 PR 目標為 <code>main</code> 時執行。<code>Frontend</code> 固定 Node 22、依鎖檔安裝，稽核正式依賴、Lint、測試、Cloudflare 乾跑，然後建置 Next.js、核對私人 API 路由與 CSP，最後驗證 Pages 靜態產物。<code>Supply Chain</code> 用 Trivy 阻擋 HIGH／CRITICAL，並輸出 CycloneDX SBOM；可在該次執行頁下方 Artifacts 下載 <code>sbom-cyclonedx</code>，保留 30 天。SBOM 是元件清單，不是安全通過證明。</p>
+</li><li>
+<p><code>.github/workflows/codeql.yml</code>：<code>main</code> 的推送、以 <code>main</code> 為目標的 PR、以及預設分支每週排程會掃描 JavaScript／TypeScript；一般工作分支的 push 不會執行。從 <a href="https://github.com/helloapple080/HsuFamily/actions/workflows/codeql.yml">CodeQL 執行紀錄</a>和 Security → Code scanning 查看；掃描執行成功不表示沒有告警。</p>
+</li><li>
+<p><code>.github/workflows/pages.yml</code>：在 <code>main</code> 的 push／PR 先測試、Lint、組建並驗證 <code>frontend/out</code>；PR 不上傳、不發布。<code>main</code> 的 push 才上傳 Pages artifact，並交由 <code>github-pages</code> 環境部署。GitHub 目前 Settings → Pages → Source 為 GitHub Actions，部署權限只在 Pages 部署工作使用。</p>
+</li><li>
+<p><code>.github/dependabot.yml</code>：每週檢查 <code>frontend</code> 套件及 GitHub Actions 版本，開更新 PR；不會自行合併或發布。應檢查更新內容、鎖檔、CI 與安全結果再決定是否接受。</p>
+</li></ul>
+
+<p><strong>紅燈怎麼辦：</strong> 打開失敗的工作，先讀第一個失敗步驟。Lint／Test 紅燈，在本機跑同名指令重現；依賴稽核／Trivy 紅燈先確認套件或檔案，不要降低嚴重度門檻；Pages 紅燈先重跑 <code>pnpm build:pages &amp;&amp; pnpm test:pages</code>，不要略過靜態檔驗證。如果只是網路或 runner 暫時錯誤，在同一執行頁選 <strong>Re-run failed jobs</strong>，或執行 <code>gh run rerun 123456789 --failed</code>。程式有問題則修好、提交新 SHA 再推，不要部署失敗或取消的版本。</p>
+
+<p>目前 <code>main</code> 未啟用強制通過檢查的分支規則；上面的綠燈是維運者必須手動把關的條件，GitHub 不會替你阻擋所有不合規合併。要變更合併規則時先核對實際回報的檢查名稱，並另外驗證 Pages 發布。</p>
+
+<p>這是公開儲存庫，現有工作使用 GitHub 標準代管 runner，依 <a href="https://docs.github.com/en/billing/concepts/product-billing/github-actions">GitHub Actions 計費說明</a>不收這類運算分鐘費。不要改用較大型付費 runner，也不要把資料或憑證放到公開日誌、產物或分支。</p>
+
+<h2>4. 私人測試站更新：只部署 CI 已通過的同一個 SHA<span><a href="#label-4.+-E7-A7-81-E4-BA-BA-E6-B8-AC-E8-A9-A6-E7-AB-99-E6-9B-B4-E6-96-B0-EF-BC-9A-E5-8F-AA-E9-83-A8-E7-BD-B2+CI+-E5-B7-B2-E9-80-9A-E9-81-8E-E7-9A-84-E5-90-8C-E4-B8-80-E5-80-8B+SHA">&para;</a> <a href="#top">&uarr;</a></span></h2>
+
+<p>以下只適用於<strong>已建立及保護的</strong> <code>hsu-family-staging</code>。首次建立、設定 Access、確認 Free 方案，請照 <a href="cloudflare-staging.html">Cloudflare 實作紀錄</a>；如果沒有 <code>wrangler.staging.local.jsonc</code> 或不是該帳戶，先停，不可改用共用 <code>wrangler.jsonc</code> 執行遠端部署。本節只有第 3 步會發布新程式，不會變更 D1 資料。</p>
+<ol><li>
+<p>從乾淨工作樹確認 <code>git rev-parse HEAD</code> 是 Actions 綠燈的同一個 SHA。在 <code>frontend</code> 執行前置檢查；<code>whoami</code> 若未登入，才執行 <code>pnpm exec wrangler login</code>，由帳戶持有人在瀏覽器授權，再重跑。</p>
+</li></ol>
+
+<pre>git status --short
+git rev-parse HEAD
+git check-ignore wrangler.staging.local.jsonc
+pnpm exec wrangler whoami
+pnpm build:cloudflare
+pnpm exec wrangler deploy --dry-run --config wrangler.staging.local.jsonc
+pnpm exec wrangler deployments status --config wrangler.staging.local.jsonc
+pnpm exec wrangler d1 migrations list DB --remote --config wrangler.staging.local.jsonc</pre>
+<ol><li>
+<p>核對乾跑輸出：Worker 與 D1 名稱是 <code>hsu-family-staging</code>，資料庫綁定只有 <code>DB</code>，其他只有 Access／來源的三個變數；<code>preview_urls</code> 為 <code>false</code>，無 R2、Images、排程或自訂網域。抄下目前 Worker version ID 到私密維運筆記。若發現待套 D1 遷移，不要接著執行下方部署：先做測試備份和還原演練，確認新舊版本與資料結構相容，才依隔離手冊另行套用及驗證。純前端、文件更新不要重跑資料遷移。</p>
+</li><li>
+<p>確認沒有要回復或升級的提示後，僅在真的有私站程式變更時執行發布。文件更新不必部署。</p>
+</li></ol>
+
+<pre>pnpm exec wrangler deploy --config wrangler.staging.local.jsonc</pre>
+<ol><li>
+<p>用<strong>無痕瀏覽器</strong>開首頁，應先出現 Cloudflare 登入頁；再檢查下列無登入請求，預期兩行都是 <code>302</code>。不用 <code>-L</code>，也不要貼含暫時登入參數的完整回應標頭。</p>
+</li></ol>
+
+<pre>stage_url=&#39;https://hsu-family-staging.helloapple080.workers.dev&#39;
+curl -sS --max-time 15 -o /dev/null -w &#39;%{http_code}\n&#39; &quot;$stage_url/&quot;
+curl -sS --max-time 15 -o /dev/null -w &#39;%{http_code}\n&#39; &quot;$stage_url/api/hosted/auth/me&quot;</pre>
+<ol><li>
+<p>白名單管理員登入，確認身分正確、假拜拜規則可讀；依改動測行事曆、行程或手機表單。記下「日期／Git SHA／CI 連結／前後 Worker 版本／測試結果／仍未驗收項目」。不要把雲端登入、角色或照片驗收用 CI 綠燈帶過。</p>
+</li></ol>
+
+<p>每次發布可直接複製這份紀錄格式（不放信箱、權杖或資料庫內容）：</p>
+
+<pre class="ruby"><span class="ruby-identifier">日期／環境：</span>
+<span class="ruby-constant">Git</span> <span class="ruby-constant">SHA／CI</span> <span class="ruby-identifier">執行網址：</span>
+<span class="ruby-constant">Worker</span> <span class="ruby-identifier">前一版本</span> <span class="ruby-identifier">→</span> <span class="ruby-identifier">新版本：</span>
+<span class="ruby-identifier">匿名與管理員驗證：</span>
+<span class="ruby-identifier">資料庫遷移／回復方式：</span>
+<span class="ruby-identifier">尚未驗收項目：</span>
+</pre>
+
+<h2>5. 公開展示發布與兩種回復<span><a href="#label-5.+-E5-85-AC-E9-96-8B-E5-B1-95-E7-A4-BA-E7-99-BC-E5-B8-83-E8-88-87-E5-85-A9-E7-A8-AE-E5-9B-9E-E5-BE-A9">&para;</a> <a href="#top">&uarr;</a></span></h2>
+<ul><li>
+<p><strong>公開展示</strong>：有意更新展示才走 PR 審查與 <code>main</code> 合併，先確認 PR 的 CI、Pages 建置與 CodeQL 檢查。合併後到 <a href="https://github.com/helloapple080/HsuFamily/actions/workflows/pages.yml">Pages 工作流</a> 看 <code>Build Pages Demo</code>、<code>Deploy Pages Demo</code> 兩個工作，以首頁 <code>200</code>、<code>/HsuFamily/api/hosted/auth/me</code> <code>404</code> 再驗證。發布錯版時，用新的 PR 撤銷那次程式變更，再走同一路徑重新發布；不要強制推送或把私人出口改指到 Pages。</p>
+</li><li>
+<p><strong>私人測試 Worker</strong>：若只是程式錯版且 D1 相容，Cloudflare → Workers &amp; Pages → <code>hsu-family-staging</code> → Deployments 選上次已驗證的版本，使用 Rollback；CLI 也可用下方命令。回復後重做匿名及管理員驗證。它回復的是程式、資產及版本設定，<strong>不會把 D1 資料或 Access 政策倒回去</strong>。<a href="https://developers.cloudflare.com/workers/versions-and-deployments/rollbacks/">Cloudflare Worker 回復說明</a></p>
+</li></ul>
+
+<pre>pnpm exec wrangler deployments list --config wrangler.staging.local.jsonc
+# 把 PREVIOUS_VERSION_ID 換成事前記錄、相容且已驗證的 Worker UUID，再確認提示。
+pnpm exec wrangler rollback PREVIOUS_VERSION_ID --config wrangler.staging.local.jsonc</pre>
+
+<p>如果未登入居然看得到私人內容、目標接錯，或 D1 遷移無法回復，先停寫並關閉測試站的 <code>workers.dev</code> 路由。Access 登入保護要保留，預覽網址要保持關閉，不要為了讓畫面恢復而停用登入保護。先保全資料與紀錄，依 <a href="cloudflare-staging.html">Cloudflare 實作紀錄</a>處理備份及隔離還原，不要自動覆蓋資料庫。</p>
+
+<h2>6. 本次核對與下一個驗收點<span><a href="#label-6.+-E6-9C-AC-E6-AC-A1-E6-A0-B8-E5-B0-8D-E8-88-87-E4-B8-8B-E4-B8-80-E5-80-8B-E9-A9-97-E6-94-B6-E9-BB-9E">&para;</a> <a href="#top">&uarr;</a></span></h2>
+
+<p>2026-11-17（台北時間）：工作分支 <code>516fb08</code> 的 <a href="https://github.com/helloapple080/HsuFamily/actions/runs/43899310996">CI</a> 已通過；公開展示的 <a href="https://github.com/helloapple080/HsuFamily/actions/runs/30146143974">main 發布</a>及 <a href="https://github.com/helloapple080/HsuFamily/actions/runs/42736931107">CodeQL 排程</a> 取自另一個提交 <code>bbe6168</code>，不算工作分支的 CodeQL 結果。重新驗證公開首頁 <code>200</code>／私人路徑 <code>404</code>、Cloudflare 匿名首頁／身分／拜拜 API <code>302</code>；測試 Worker 單一版本承接 100% 流量，D1 沒有待套遷移。本次文件更新不需要重新發布 Worker。</p>
+
+<p>下一步仍是實機手機與第二個經本人核准的帳號，驗證唯讀、拒寫與撤權；白名單未擴大前，不會把這些標成通過。照片另作決策：硬性避免超額扣款時，不接 R2／Images；若照片優先且能用 Supabase Free 的 1 GB，再獨立驗證既有回退版，不直接搬正式資料。</p>
+  </main>
+</body>
+</html>

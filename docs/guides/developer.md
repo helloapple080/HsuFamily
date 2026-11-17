@@ -1,10 +1,12 @@
 # 許氏入口網開發與部署手冊
 
-[切換至使用者手冊](user.md) · [瀏覽器版](developer.html)
+[切換至使用者手冊](user.md) · [CI/CD 照做手冊](ci-cd.md) · [瀏覽器版](developer.html)
 
 ## 私人入口網：Cloudflare／React＋Vite
 
 新入口網沿用 React 介面，部署到 `workers.dev` 可不買網域、不架家用主機。`frontend/spa` 組裝 React，`frontend/src/components/features`、`hooks` 和領域契約供兩個入口共享；`frontend/edge` 集中驗證 Access、同源及角色後，再存取 D1 和私人 R2。Cloudflare 沒有 PostgreSQL RLS：D1 只透過 Worker binding 存取，不對外公開。讀取與重新開啟頁面用共用資料；管理員編輯或刪除時用版本比對，防止兩人互蓋。這不是即時推播。
+
+要送出改動、看 GitHub Actions、發布展示版或更新隔離站，請照 [CI/CD 照做手冊](ci-cd.md)：工作分支是自動檢查，公開展示由 `main` 發布，私人站在 CI 綠燈後由維運者手動部署。首次建立環境才使用下面的設定步驟，日常更新不需要重新建庫或放寬白名單。
 
 ### 本機測試（不登入、不部署）
 

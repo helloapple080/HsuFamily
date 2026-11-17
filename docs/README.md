@@ -2,7 +2,7 @@
 title: 許氏入口網文件中心
 aliases: [HsuFamily 文件中心, 許氏入口網知識庫]
 tags: [HsuFamily, documentation, Obsidian, governance]
-updated: 2026-11-12
+updated: 2026-11-17
 code_baseline: 57d1110
 ---
 
@@ -10,8 +10,9 @@ code_baseline: 57d1110
 
 ## 開發與使用手冊
 
-- 開發者：[Markdown](./guides/developer.md) · [HTML](./guides/developer.html)，含目前的 Next.js／Supabase 部署、驗收與備份。
+- 開發者：[Markdown](./guides/developer.md) · [HTML](./guides/developer.html)，含 Cloudflare 隔離站、驗收、備份與 Next.js／Supabase 回退方案。
 - 家人：[Markdown](./guides/user.md) · [HTML](./guides/user.html)，含登入、農曆行事曆及介面操作。
+- CI/CD：[Markdown](./guides/ci-cd.md) · [HTML](./guides/ci-cd.html)，含 GitHub Actions、故障排除、公開展示發布、私人測試站更新與回復。
 
 ## 公開展示網站
 
@@ -21,7 +22,7 @@ GitHub Pages 唯讀展示版：<https://helloapple080.github.io/HsuFamily/>
 - 展示版不提供私人 API 或登入，也不處理登入 Cookie 或密碼。
 - 新增、修改與刪除只會顯示「公開展示模式不會儲存任何變更」，不會永久保存。
 - 每次 `main` 更新後由 `.github/workflows/pages.yml` 自動測試、靜態建置並部署。
-- 私人入口網使用 Next.js、Supabase Auth、PostgreSQL 和私人 Storage；展示與私人建置彼此分開。
+- 新私人測試站使用 React＋Vite、Cloudflare Workers／Access／D1，與公開展示分開發布。Next.js／Supabase 是保留的回退方案；未切換正式站。
 
 ## 歷史稽核：舊版基準結論
 
