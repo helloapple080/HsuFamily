@@ -25,6 +25,7 @@
 15. **模擬手機驗收並修正矮螢幕。** 用 Chrome 的 390×844、320×568 直式視窗檢查選單、拜拜日期、活動月曆換月、成員及行程。月曆只有格子內左右捲；整頁不會橫向捲。568×320 橫式發現新增行程表單超出畫面，修正為表單內可上下捲。Lint、型別、148 項測試和打包通過；只部署到隔離 Worker，重跑原尺寸並確認空白儲存會提示必填、取消可按，沒有新增資料。這是瀏覽器尺寸模擬，不等於 iPhone 或 Android 實機驗收。
 16. **分開記錄檢查、發布與回復。** `516fb08` 的工作分支 CI 通過；公開展示和 CodeQL 是 `main` 的另一版本。重查匿名首頁及 API 都導向 Access，公開展示首頁可用且沒有私人 API，測試 D1 沒有待套遷移。整理成 [CI/CD 照做手冊](ci-cd.md)，本次只更新文件，不部署 Worker、不合併 `main`。
 17. **實測兩頁同時編輯會不會互蓋（2026-11-17）。** 同一管理員在兩個頁籤編輯「假資料：還原演練」。A 先儲存，B 用舊版本送出時看到衝突提示且保留草稿；重新整理只顯示 A。D1 查核版本由 `1` 增至 `2`，B 沒有覆寫。用表單還原空白備註後，版本正常增至 `3`；原本的農曆八月十五、一般月份規則仍在，依然只有一筆假規則、零張照片、一位啟用管理員，示例家人仍停用。沒有新增白名單、調整費用設定或變更正式站。重做步驟見 [CI/CD 照做手冊](ci-cd.md)第 4 節。
+18. **把未完成的權限情境先做成本機自動驗收。** 用合成權杖和不留存資料的本機 D1，確認唯讀家人可讀不能新增、修改、刪除，未核准帳號不可讀，停用後相同的未過期權杖不可讀，以及管理員跨站寫入被拒。這些測試自動納入 CI，重做步驟見 [CI/CD 照做手冊](ci-cd.md)第 2 節；沒有新增 Access 白名單或寫入雲端資料。真人帳號與手機仍是另外的驗收關卡。
 
 ## 怎麼重做（維運者）
 
@@ -79,5 +80,5 @@ shasum -a 256 "$audit_dir/backup.sql"
 - [Workers Free](https://developers.cloudflare.com/workers/platform/limits/) 和 [D1 Free](https://developers.cloudflare.com/d1/platform/pricing/) 有用量上限；保留 Free，避免超量時切換付費方案。不要為試站購買網域。
 - [R2 Standard](https://developers.cloudflare.com/r2/pricing/#free-tier) 有免費用量，帳戶總用量超額會計費。[Cloudflare 支出控制說明](https://developers.cloudflare.com/billing/manage/spend-management/) 指出真正的止扣上限不涵蓋 R2，也不保證帳單上限；[預算警報](https://developers.cloudflare.com/billing/manage/budget-alerts/) 只寄通知。要求零額外扣款時不連接 R2；若帳戶只為此專案開通 R2、又不打算用，可由帳戶持有人在帳單頁檢查及取消訂閱，切勿刪除其他用途的資源。
 - Zero Trust Free 的「今天 US$0」是方案價格，不是帳戶零元止扣設定。[官方開通說明](https://developers.cloudflare.com/cloudflare-one/setup/) 與[官方席次說明](https://developers.cloudflare.com/cloudflare-one/team-and-resources/users/seat-management/)可核對方案與登入上限。本次僅用一席測試，沒有升級或加購；不接受額外計費服務時，維持 R2 和 Images 未連接。
-- **還不能切正式站。** 未使用第二個真實信箱驗證未白名單與唯讀家人，未實測撤權和已登入的跨站寫入，也沒有雲端照片上傳／備份與正式資料搬移。這些不能用本機測試或已通過的匿名檢查代替。需要操作公開版時，仍可用[唯讀假資料展示](https://helloapple080.github.io/HsuFamily/)。
+- **還不能切正式站。** 未使用第二個真實信箱驗證未白名單與唯讀家人，雲端尚未實測撤權和已登入的跨站寫入，也沒有雲端照片上傳／備份與正式資料搬移。這些不能用本機測試或已通過的匿名檢查代替。需要操作公開版時，仍可用[唯讀假資料展示](https://helloapple080.github.io/HsuFamily/)。
 - **下一步：** 用真手機登入隔離站，只看假資料，確認選單、月曆左右滑與鍵盤開啟後的表單。第二位測試者的信箱尚未核准，白名單維持單人；之後有核准帳號再驗證唯讀與撤權。費用限制維持不開 R2／Images、不搬正式資料、不切換正式站。

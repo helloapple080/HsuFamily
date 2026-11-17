@@ -40,6 +40,14 @@ pnpm build:pages && pnpm test:pages
 
 每行都應成功才繼續。`check:cloudflare` 只在本機產生 Vite 檔案及檢查 Worker 打包，不會部署；`build` 是檢查 Next.js 回退版，`build:pages` 則產生唯讀展示。若只改文件，專案根目錄另跑 `ruby docs/guides/render.rb`、`ruby docs/guides/render.rb --check`、`git diff --check`，Markdown 與對應 HTML 要一起提交。
 
+要單獨重跑 Cloudflare 私人 API 的權限演練，在 `frontend` 執行：
+
+```sh
+pnpm test edge/tests/access-lifecycle.test.ts
+```
+
+預期 4 項通過。這個測試用合成簽章權杖、正式 Worker 的 API 程式和 [Wrangler 本機 D1](https://developers.cloudflare.com/workers/wrangler/api/#getplatformproxy)，驗證唯讀家人拒寫、未核准拒讀、停權後舊權杖拒讀、以及管理員跨站寫入遭拒；同時確認原資料沒被改。完整 `pnpm test` 和 CI 都會執行它。無需 Cloudflare 登入、真實信箱或雲端 D1，更不是 Access 登入頁或實際手機驗收。
+
 改完用 `git status`、`git diff` 確認只有這次的檔案，再用 `git add <這次修改的實際檔案>`、英文 Conventional Commit 訊息提交，最後執行 `git push origin codex/cloudflare-react`。不要加入 `.env`、`wrangler.staging.local.jsonc`、權杖、D1 匯出、驗證碼、信箱或原始照片。新開的一般工作分支不在 CI 的推送名單裡；若要走 PR 檢查，先核對目標為 `main`，但不要未經驗收就合併。
 
 ## 3. 在 GitHub 看結果與排除失敗

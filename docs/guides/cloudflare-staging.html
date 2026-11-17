@@ -62,6 +62,8 @@
 <p><strong>分開記錄檢查、發布與回復。</strong> <code>516fb08</code> 的工作分支 CI 通過；公開展示和 CodeQL 是 <code>main</code> 的另一版本。重查匿名首頁及 API 都導向 Access，公開展示首頁可用且沒有私人 API，測試 D1 沒有待套遷移。整理成 <a href="ci-cd.html">CI/CD 照做手冊</a>，本次只更新文件，不部署 Worker、不合併 <code>main</code>。</p>
 </li><li>
 <p><strong>實測兩頁同時編輯會不會互蓋（2026-11-17）。</strong> 同一管理員在兩個頁籤編輯「假資料：還原演練」。A 先儲存，B 用舊版本送出時看到衝突提示且保留草稿；重新整理只顯示 A。D1 查核版本由 <code>1</code> 增至 <code>2</code>，B 沒有覆寫。用表單還原空白備註後，版本正常增至 <code>3</code>；原本的農曆八月十五、一般月份規則仍在，依然只有一筆假規則、零張照片、一位啟用管理員，示例家人仍停用。沒有新增白名單、調整費用設定或變更正式站。重做步驟見 <a href="ci-cd.html">CI/CD 照做手冊</a>第 4 節。</p>
+</li><li>
+<p><strong>把未完成的權限情境先做成本機自動驗收。</strong> 用合成權杖和不留存資料的本機 D1，確認唯讀家人可讀不能新增、修改、刪除，未核准帳號不可讀，停用後相同的未過期權杖不可讀，以及管理員跨站寫入被拒。這些測試自動納入 CI，重做步驟見 <a href="ci-cd.html">CI/CD 照做手冊</a>第 2 節；沒有新增 Access 白名單或寫入雲端資料。真人帳號與手機仍是另外的驗收關卡。</p>
 </li></ol>
 
 <h2>怎麼重做（維運者）<span><a href="#label-E6-80-8E-E9-BA-BC-E9-87-8D-E5-81-9A-EF-BC-88-E7-B6-AD-E9-81-8B-E8-80-85-EF-BC-89">&para;</a> <a href="#top">&uarr;</a></span></h2>
@@ -118,7 +120,7 @@ shasum -a 256 &quot;$audit_dir/backup.sql&quot;</pre>
 </li><li>
 <p>Zero Trust Free 的「今天 US$0」是方案價格，不是帳戶零元止扣設定。<a href="https://developers.cloudflare.com/cloudflare-one/setup/">官方開通說明</a> 與<a href="https://developers.cloudflare.com/cloudflare-one/team-and-resources/users/seat-management/">官方席次說明</a>可核對方案與登入上限。本次僅用一席測試，沒有升級或加購；不接受額外計費服務時，維持 R2 和 Images 未連接。</p>
 </li><li>
-<p><strong>還不能切正式站。</strong> 未使用第二個真實信箱驗證未白名單與唯讀家人，未實測撤權和已登入的跨站寫入，也沒有雲端照片上傳／備份與正式資料搬移。這些不能用本機測試或已通過的匿名檢查代替。需要操作公開版時，仍可用<a href="https://helloapple080.github.io/HsuFamily/">唯讀假資料展示</a>。</p>
+<p><strong>還不能切正式站。</strong> 未使用第二個真實信箱驗證未白名單與唯讀家人，雲端尚未實測撤權和已登入的跨站寫入，也沒有雲端照片上傳／備份與正式資料搬移。這些不能用本機測試或已通過的匿名檢查代替。需要操作公開版時，仍可用<a href="https://helloapple080.github.io/HsuFamily/">唯讀假資料展示</a>。</p>
 </li><li>
 <p><strong>下一步：</strong> 用真手機登入隔離站，只看假資料，確認選單、月曆左右滑與鍵盤開啟後的表單。第二位測試者的信箱尚未核准，白名單維持單人；之後有核准帳號再驗證唯讀與撤權。費用限制維持不開 R2／Images、不搬正式資料、不切換正式站。</p>
 </li></ul>
