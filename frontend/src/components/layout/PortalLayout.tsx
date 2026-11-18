@@ -114,7 +114,7 @@ export default function PortalLayout({ children, onAccessLogout }: PortalLayoutP
     <div className="flex min-h-screen bg-gradient-mesh">
       <a className="skip-link" href="#main-content">跳到主要內容</a>
 
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col rounded-none border-r border-[var(--glass-border)] glass-panel-strong md:flex">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col overflow-y-auto overscroll-y-contain border-r border-border bg-card md:flex">
         <div className="flex items-center gap-3 p-6">
           <div className="flex size-10 items-center justify-center rounded-xl bg-[var(--primary)] text-[var(--primary-foreground)] shadow-md">
             <House aria-hidden="true" className="size-5" />
@@ -124,10 +124,10 @@ export default function PortalLayout({ children, onAccessLogout }: PortalLayoutP
             <p className="text-xs text-[var(--muted-foreground)]">Hsu Family Portal</p>
           </div>
         </div>
-        <Separator className="opacity-30" />
+        <Separator />
         {navigation()}
-        <Separator className="opacity-30" />
-        <div className="space-y-3 p-4">
+        <Separator />
+        <div className="shrink-0 space-y-3 p-4">
           <div className="flex items-center gap-3">
             <Avatar className="size-9 border border-[var(--border)]">
               <AvatarFallback className="bg-[var(--primary)] text-sm text-[var(--primary-foreground)]">
@@ -150,7 +150,7 @@ export default function PortalLayout({ children, onAccessLogout }: PortalLayoutP
         </div>
       </aside>
 
-      <header className="fixed inset-x-0 top-0 z-30 flex h-16 items-center justify-between rounded-none border-b border-[var(--glass-border)] px-4 glass-panel-strong md:hidden">
+      <header className="fixed inset-x-0 top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-card px-4 md:hidden">
         <Link href="/calendar" className="flex min-h-11 items-center gap-2 font-bold">
           <House aria-hidden="true" className="size-5" />
           許氏入口網
@@ -161,14 +161,14 @@ export default function PortalLayout({ children, onAccessLogout }: PortalLayoutP
       </header>
 
       <Sheet open={isMenuOpen} onOpenChange={setIsMenuOpen}>
-        <SheetContent side="left" className="w-[min(20rem,85vw)] glass-panel-strong">
+        <SheetContent side="left" className="w-[min(20rem,85vw)] overflow-y-auto overscroll-y-contain bg-card">
           <SheetHeader>
             <SheetTitle>許氏入口網</SheetTitle>
             <SheetDescription>選擇要前往的功能</SheetDescription>
           </SheetHeader>
           {navigation(true)}
-          <div className="border-t border-[var(--glass-border)] p-4">
-            <p className="mb-3 truncate text-sm">{user?.displayName}</p>
+          <div className="shrink-0 space-y-3 border-t border-border p-4">
+            <p className="truncate text-sm">{user?.displayName}</p>
             <ThemeSwitcher />
             <Button variant="outline" className="min-h-11 w-full" onClick={handleLogout}>
               <LogOut aria-hidden="true" />
@@ -179,7 +179,7 @@ export default function PortalLayout({ children, onAccessLogout }: PortalLayoutP
       </Sheet>
 
       <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 pt-16 md:ml-64 md:pt-0">
-        <div className="space-y-4 p-4 sm:p-6 lg:p-8">
+        <div className="mx-auto w-full max-w-7xl space-y-4 p-4 sm:p-6 lg:px-10 lg:py-8">
           {isDemoMode && <DemoModeBanner />}
           {children}
         </div>

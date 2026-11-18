@@ -15,17 +15,18 @@ export default function ThemeSwitcher() {
   const { theme, setTheme } = useTheme()
 
   return (
-    <div role="group" aria-label="切換顯示主題" className="flex gap-1">
+    <div role="group" aria-label="切換顯示主題" className="grid grid-cols-3 gap-1">
       {themes.map(({ value, label, icon: Icon }) => (
         <Button
           key={value}
           type="button"
-          variant={theme === value ? 'secondary' : 'ghost'}
+          variant={theme === value ? 'default' : 'ghost'}
+          className="h-auto min-h-12 min-w-0 flex-col gap-1 px-1 py-1.5 text-xs leading-tight whitespace-normal"
           aria-pressed={theme === value}
           onClick={() => setTheme(value)}
         >
           <Icon aria-hidden="true" />
-          {label}
+          <span>{label}</span>
         </Button>
       ))}
     </div>

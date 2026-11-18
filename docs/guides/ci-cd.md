@@ -38,7 +38,7 @@ pnpm test:csp
 pnpm build:pages && pnpm test:pages
 ```
 
-每行都應成功才繼續。`check:cloudflare` 只在本機產生 Vite 檔案及檢查 Worker 打包，不會部署；`build` 是檢查 Next.js 回退版，`build:pages` 則產生唯讀展示。若只改文件，專案根目錄另跑 `ruby docs/guides/render.rb`、`ruby docs/guides/render.rb --check`、`git diff --check`，Markdown 與對應 HTML 要一起提交。
+每行都應成功才繼續。`check:cloudflare` 在本機產生 Vite 靜態檔、檢查按鈕／邊框等主題色和深色變體確實出現在 CSS，再做 Worker 打包乾跑，不會部署。改介面時另用瀏覽器檢查深淺色和桌面／手機尺寸；若主題樣式檢查失敗，先確認 `globals.css` 將現有色票連到 Tailwind 的語義類別。 `build` 是檢查 Next.js 回退版，`build:pages` 則產生唯讀展示。若只改文件，專案根目錄另跑 `ruby docs/guides/render.rb`、`ruby docs/guides/render.rb --check`、`git diff --check`，Markdown 與對應 HTML 要一起提交。
 
 要單獨重跑 Cloudflare 私人 API 的權限演練，在 `frontend` 執行：
 
