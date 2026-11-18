@@ -70,6 +70,8 @@
 <p><strong>發布並重驗隔離站（2026-11-18）。</strong> <code>a8c6fe5</code> 的 <a href="https://github.com/helloapple080/HsuFamily/actions/runs/44338929496">CI</a> 通過後，確認沒有待套遷移，只發布隔離 Worker。舊版 <code>e862d426…</code> → 新版 <code>fb8f7f0f…</code>，新版承接 100% 流量。部署後匿名首頁、身分與拜拜 API 仍回 <code>302</code>；管理員重開後可看到假拜拜日期、桌面頁籤底色與手機選單。沒變更 D1、Access 白名單、正式站或費用方案；這仍是瀏覽器尺寸驗收。</p>
 </li><li>
 <p><strong>部署家用備忘（2026-11-19）。</strong> <code>100bf80</code> 的 <a href="https://github.com/helloapple080/HsuFamily/actions/runs/44343814555">CI</a> 通過；先匯出隔離 D1 並在新 SQLite 成功還原、核對完整性和外鍵，再只套用 <code>0003_household_notes.sql</code>。遷移後再次匯出並還原；停用帳號／拜拜規則／照片／備忘筆數為 <code>1 / 1 / 0 / 0</code>。隔離 Worker <code>fb8f7f0f…</code> → <code>db82dcf4…</code>，新版承接 100% 流量。匿名首頁、備忘頁與 API 各回 <code>302</code>；核准管理員能讀既有拜拜規則，並可開啟、取消手機尺寸下的備忘表單。備忘沒有寫入範例；正式資料、Access 白名單與費用方案不變。唯讀家人和寫入衝突已在本機跑過，尚未用另一個真實帳號驗收。</p>
+</li><li>
+<p><strong>部署手機導覽、下一次拜拜與備忘日期（2026-11-19）。</strong> <code>e09ccab</code> 的 <a href="https://github.com/helloapple080/HsuFamily/actions/runs/44351620775">CI</a> 通過，本機 163 項測試。隔離 D1 匯出後在本機還原成功；在還原副本加入一筆版本 4 的測試備忘後試套 <code>0004</code>，原文字和版本不變，兩個日期預設為空。遠端只套 <code>0004_household_dates.sql</code>，套用前後帳號／紀錄／照片／備忘總筆數同為 <code>2 / 0 / 0 / 0</code>，只有原先一位啟用管理員。隔離 Worker <code>db82dcf4…</code> → <code>c156f8c6…</code>，承接 100% 流量。匿名首頁、備忘頁和備忘 API 都回 <code>302</code>；管理員以 390×844 開啟備忘、確認兩個日期欄並取消，沒有寫入。沒有改 Access、R2、Images、費用方案、<code>main</code> 或正式站。iPhone、Android 實機及第二位核准家人尚未驗收。</p>
 </li></ol>
 
 <h2>怎麼重做（維運者）<span><a href="#label-E6-80-8E-E9-BA-BC-E9-87-8D-E5-81-9A-EF-BC-88-E7-B6-AD-E9-81-8B-E8-80-85-EF-BC-89">&para;</a> <a href="#top">&uarr;</a></span></h2>

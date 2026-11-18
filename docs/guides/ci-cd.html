@@ -171,7 +171,9 @@ pnpm exec wrangler rollback PREVIOUS_VERSION_ID --config wrangler.staging.local.
 
 <p>2026-11-19（台北時間）：家用備忘 <code>100bf80</code> 的 <a href="https://github.com/helloapple080/HsuFamily/actions/runs/44343814555">CI</a> 通過，本機 157 項測試通過。隔離站已按第 4 節發布：先備份還原再套用 <code>0003_household_notes.sql</code>，重新核對備忘 0 筆及既有資料筆數；Worker <code>fb8f7f0f…</code> → <code>db82dcf4…</code>，匿名與管理員空白頁驗收通過。沒有合併 <code>main</code>、部署公開展示或切換正式站。仍待真機和另一核准家人帳號驗收；詳細操作見<a href="cloudflare-staging.html">隔離站紀錄</a>。</p>
 
-<p>同日隔離站實測：A 儲存後 D1 版本 <code>1 → 2</code>；B 被拒、草稿留在表單，D1 仍是版本 <code>2</code> 且保留 A。重新整理可見 A，還原空白備註後 D1 版本為 <code>3</code>。仍是一筆假規則、零張照片，白名單未變。</p>
+<p>先前隔離站的衝突演練：A 儲存後 D1 版本 <code>1 → 2</code>；B 被拒、草稿留在表單，D1 仍是版本 <code>2</code> 且保留 A。重新整理可見 A，還原空白備註後 D1 版本為 <code>3</code>。當時用的是一筆假規則；該演練資料目前已不在，不用補回。</p>
+
+<p>2026-11-19（台北時間）：手機及備忘日期 <code>e09ccab</code> 的 <a href="https://github.com/helloapple080/HsuFamily/actions/runs/44351620775">CI</a> 通過。依第 4 節備份還原後，只套用 D1 <code>0004_household_dates.sql</code>，遷移後待套數為 0，紀錄／照片／備忘皆 0 筆。隔離 Worker <code>db82dcf4…</code> → <code>c156f8c6…</code>，承接 100% 流量。未登入三路徑都回 <code>302</code>；原管理員實測手機尺寸下開關備忘表單，沒有寫入或擴大權限。未切換正式站、未連計費服務。</p>
 
 <p>下一步仍是實機手機與第二個經本人核准的帳號，驗證唯讀、拒寫與撤權；白名單未擴大前，不會把這些標成通過。照片另作決策：硬性避免超額扣款時，不接 R2／Images；若照片優先且能用 Supabase Free 的 1 GB，再獨立驗證既有回退版，不直接搬正式資料。</p>
   </main>
