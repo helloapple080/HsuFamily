@@ -16,4 +16,4 @@
 
 - [x] **API 與資料表：** 在 `frontend/edge/tests/access-lifecycle.test.ts` 先驗證 `/api/hosted/household` 會拒絕跨站和普通家人寫入，並用管理員執行空清單 → 新增 `201` → 修改 `200` → 舊版本刪除 `409` → 正確版本刪除 `200`。以 `node_modules/.bin/vitest run edge/tests/access-lifecycle.test.ts` 看紅綠；實作在 `edge/migrations/0003_household_notes.sql`、`edge/household.ts`、`edge/router.ts`、`src/lib/hosted/household-contract.ts`。
 - [x] **頁面與角色：** 在 `frontend/src/components/features/household/__tests__/HouseholdNotes.test.tsx` 驗證空清單與唯讀、篩選、表單衝突保留輸入；建立 `HouseholdNotes.tsx`、編輯器、`useHouseholdNotes.ts`、SPA 導覽；共用外殼只在 Cloudflare 顯示選項。檢查 320px、390px 與桌面，深淺色沿用本機主題。
-- [ ] **發布與文件：** 更新 `docs/guides` 的家人、開發者、隔離站及 CI/CD 手冊，執行 `ruby docs/guides/render.rb --check`、`git diff --check`，同步 Obsidian。通過完整 CI，再對隔離 D1 作備份／還原、加法遷移、部署及匿名／管理員檢查。
+- [x] **發布與文件：** 更新 `docs/guides` 的家人、開發者、隔離站及 CI/CD 手冊，執行 `ruby docs/guides/render.rb --check`、`git diff --check`，同步 Obsidian。通過完整 CI，再對隔離 D1 作備份／還原、加法遷移、部署及匿名／管理員檢查。實際結果見 [Cloudflare 隔離站紀錄](../../guides/cloudflare-staging.md)。

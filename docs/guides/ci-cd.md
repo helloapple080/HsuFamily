@@ -146,6 +146,8 @@ pnpm exec wrangler rollback PREVIOUS_VERSION_ID --config wrangler.staging.local.
 
 2026-11-17（台北時間）：工作分支 `516fb08` 的 [CI](https://github.com/helloapple080/HsuFamily/actions/runs/43899310996) 已通過；公開展示的 [`main` 發布](https://github.com/helloapple080/HsuFamily/actions/runs/30146143974)及 [CodeQL 排程](https://github.com/helloapple080/HsuFamily/actions/runs/42736931107) 取自另一個提交 `bbe6168`，不算工作分支的 CodeQL 結果。重新驗證公開首頁 `200`／私人路徑 `404`、Cloudflare 匿名首頁／身分／拜拜 API `302`；測試 Worker 單一版本承接 100% 流量，D1 沒有待套遷移。本次文件更新不需要重新發布 Worker。
 
+2026-11-19（台北時間）：家用備忘 `100bf80` 的 [CI](https://github.com/helloapple080/HsuFamily/actions/runs/44343814555) 通過，本機 157 項測試通過。隔離站已按第 4 節發布：先備份還原再套用 `0003_household_notes.sql`，重新核對備忘 0 筆及既有資料筆數；Worker `fb8f7f0f…` → `db82dcf4…`，匿名與管理員空白頁驗收通過。沒有合併 `main`、部署公開展示或切換正式站。仍待真機和另一核准家人帳號驗收；詳細操作見[隔離站紀錄](cloudflare-staging.md)。
+
 同日隔離站實測：A 儲存後 D1 版本 `1 → 2`；B 被拒、草稿留在表單，D1 仍是版本 `2` 且保留 A。重新整理可見 A，還原空白備註後 D1 版本為 `3`。仍是一筆假規則、零張照片，白名單未變。
 
 下一步仍是實機手機與第二個經本人核准的帳號，驗證唯讀、拒寫與撤權；白名單未擴大前，不會把這些標成通過。照片另作決策：硬性避免超額扣款時，不接 R2／Images；若照片優先且能用 Supabase Free 的 1 GB，再獨立驗證既有回退版，不直接搬正式資料。
