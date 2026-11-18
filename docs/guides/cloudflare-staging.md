@@ -56,19 +56,20 @@ pnpm exec wrangler d1 execute DB --remote --config wrangler.staging.local.jsonc 
   --file ../docs/guides/examples/cloudflare-staging-seed.sql
 ```
 
-備份與還原只用假資料。匯出時 Wrangler 可能顯示短期有效下載連結；不要貼到聊天、Git 或共用文件。若正式資料要備份，應使用加密儲存，並另行備份圖片本體；D1 的 SQL 不含圖片。
+隔離站的測試備份不得含正式資料。匯出時 Wrangler 可能顯示短期有效下載連結；不要貼到聊天、Git 或共用文件。若正式資料要備份，應使用加密儲存，並另行備份圖片本體；D1 的 SQL 不含圖片。以下例子適用已經套用 `0003_household_notes.sql` 的隔離站；要做 0003 的**遷移前**備份，先從匯出和核對指令移除尚未建立的 `portal_household_notes`。
 
 ```sh
+umask 077
 audit_dir=$(mktemp -d)
 pnpm exec wrangler d1 export DB --remote --config wrangler.staging.local.jsonc \
-  --output "$audit_dir/backup.sql" --table portal_access portal_records portal_photos
+  --output "$audit_dir/backup.sql" --table portal_access portal_records portal_photos portal_household_notes
 sqlite3 -bail "$audit_dir/restore.sqlite" < "$audit_dir/backup.sql"
 sqlite3 -bail "$audit_dir/restore.sqlite" "PRAGMA integrity_check; PRAGMA foreign_key_check;"
-sqlite3 -bail "$audit_dir/restore.sqlite" "SELECT (SELECT count(*) FROM portal_access WHERE active=0), (SELECT count(*) FROM portal_records WHERE kind='worship'), (SELECT count(*) FROM portal_photos);"
+sqlite3 -bail "$audit_dir/restore.sqlite" "SELECT (SELECT count(*) FROM portal_access WHERE active=0), (SELECT count(*) FROM portal_records WHERE kind='worship'), (SELECT count(*) FROM portal_photos), (SELECT count(*) FROM portal_household_notes);"
 shasum -a 256 "$audit_dir/backup.sql"
 ```
 
-預期第一條檢查印出 `ok`，外鍵無錯誤。第二條檢查在這份測試資料為 `1|1|0`。備份本身不進 Git 或 Obsidian。
+預期第一條檢查印出 `ok`，外鍵無錯誤。第二條檢查在未新增備忘的測試資料為 `1|1|0|0`，遷移前則是 `1|1|0`。備份本身不進 Git 或 Obsidian。若使用的是既有站，確認只有 `0003_household_notes.sql` 待套、先驗證遷移前備份能還原，再用上面的 `migrations apply` 套用，核對既有表筆數不變、新表為 0 筆。本次沒有備忘的假資料種子；不必重跑舊的拜拜資料匯入。參考 [Cloudflare D1 匯入與匯出說明](https://developers.cloudflare.com/d1/best-practices/import-export-data/)。
 
 ### 重做登入與固定網址
 

@@ -1,6 +1,6 @@
 import { useSyncExternalStore, type ComponentProps } from 'react'
 
-const routePaths = ['/calendar', '/members', '/itineraries'] as const
+const routePaths = ['/calendar', '/members', '/itineraries', '/household'] as const
 type RoutePath = (typeof routePaths)[number]
 const navigationEvent = 'portal:navigate'
 

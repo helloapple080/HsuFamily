@@ -13,9 +13,10 @@ const requiredFiles = [
   'itineraries/index.html',
   '.nojekyll',
 ]
-const forbiddenPatterns = [/mongodb(?:\+srv)?:\/\//i, /Jwt__Secret/i]
+const forbiddenPatterns = [/mongodb(?:\+srv)?:\/\//i, /Jwt__Secret/i, /\/api\/hosted\/household/]
 assert.ok(!existsSync(path.join(outputRoot, 'api')), '公開展示版不可產生私人 API')
 assert.ok(!existsSync(path.join(outputRoot, 'login')), '公開展示版不可提供登入入口')
+assert.ok(!existsSync(path.join(outputRoot, 'household')), '公開展示版不可提供家用備忘')
 
 for (const relativePath of requiredFiles) {
   await readFile(path.join(outputRoot, relativePath))

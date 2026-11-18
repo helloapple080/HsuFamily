@@ -1,4 +1,5 @@
 import { accessConfig, readPortalUser, verifyAccess, type AccessSettings } from './access'
+import { handleHousehold } from './household'
 import { portalResponse } from './http'
 
 type RecordArea = 'members' | 'itineraries' | 'worship' | 'events'
@@ -48,6 +49,7 @@ export function createPortal(deps: PortalDependencies) {
       const [, area, rest] = route
       const path = rest.slice(1).split('/').filter(Boolean)
       if (area === 'auth' && path.length === 1 && path[0] === 'me' && read) return portalResponse(200, '登入成功', user)
+      if (area === 'household' && path.length <= 1) return await handleHousehold(request, path[0], user.id, env.DB)
       if (isRecordArea(area) && path.length <= 1) return await deps.records(request, area, path[0], user, env.DB)
       if (area === 'photos' && path.length >= 2 && path.length <= 3) {
         if (!env.PHOTOS || !env.IMAGES) return portalResponse(503, '照片服務尚未設定')

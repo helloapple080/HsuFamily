@@ -107,7 +107,9 @@ curl -sS --max-time 15 -o /dev/null -w '%{http_code}\n' "$stage_url/"
 curl -sS --max-time 15 -o /dev/null -w '%{http_code}\n' "$stage_url/api/hosted/auth/me"
 ```
 
-5. 白名單管理員登入，確認身分正確、假拜拜規則可讀；依改動測行事曆、行程或手機表單。記下「日期／Git SHA／CI 連結／前後 Worker 版本／測試結果／仍未驗收項目」。不要把雲端登入、角色或照片驗收用 CI 綠燈帶過。
+5. 白名單管理員登入，確認身分正確、原有行事曆資料可讀；依改動測行事曆、行程或手機表單。若是家用備忘版本，另以無登入狀態驗證 `/household`、`/api/hosted/household` 都回 `302`；登入後從選單打開，初次部署應看到空白狀態，無須把假資料寫入這一區。寫入與唯讀角色先用本機隔離測試；真實家人帳號須另驗。記下「日期／Git SHA／CI 連結／前後 Worker 版本／測試結果／仍未驗收項目」。不要把雲端登入、角色或照片驗收用 CI 綠燈帶過。
+
+6. 備忘的 `0003_household_notes.sql` 僅新增資料表，舊版 Worker 仍可用。遇到前端錯誤時，可回退 Worker 至遷移前相容版本，備忘會暫時不可見但仍保留在 D1；不要刪表或還原覆蓋現有 D1。依 [隔離站手冊](cloudflare-staging.md)先備份含 `portal_household_notes` 的新結構。
 
 ### 有改儲存或版本控制時：驗證舊編輯不會蓋掉新資料
 

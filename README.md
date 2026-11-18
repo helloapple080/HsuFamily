@@ -1,6 +1,6 @@
 # 許氏入口網 · Hsu Family Portal
 
-給家人使用的私人入口網：國農曆行事曆、跨年拜拜規則、成員、歷年行程與私人照片。新部署採 React＋Vite 和 Cloudflare Workers／Access／D1／私人 R2；尚須隔離雲端驗收，舊 Next.js／Supabase 路徑保留。公開的 [GitHub Pages 展示](https://helloapple080.github.io/HsuFamily/) 是唯讀假資料，沒有登入或私人 API。
+給家人使用的私人入口網：國農曆行事曆、跨年拜拜規則、成員、歷年行程與私人照片。新版 Cloudflare 私人入口另有「家用備忘」，整理設備位置、供水開關和店務資訊。新部署採 React＋Vite 和 Cloudflare Workers／Access／D1／私人 R2；尚須隔離雲端驗收，舊 Next.js／Supabase 路徑保留。公開的 [GitHub Pages 展示](https://helloapple080.github.io/HsuFamily/) 是唯讀假資料，沒有登入或私人 API。
 
 - 開發、部署與維護：[Markdown](docs/guides/developer.md) · [HTML](docs/guides/developer.html)
 - CI/CD（自動檢查、部署與回復）：[Markdown](docs/guides/ci-cd.md) · [HTML](docs/guides/ci-cd.html)

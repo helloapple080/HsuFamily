@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { CalendarDays, House, LogOut, MapPinned, Menu, ShieldCheck, Users } from 'lucide-react'
+import { CalendarDays, House, LogOut, MapPinned, Menu, NotebookText, ShieldCheck, Users } from 'lucide-react'
 import api from '@/lib/api'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/authStore'
@@ -28,6 +28,7 @@ const navItems = [
   { href: '/members', label: '家庭成員', icon: Users, description: '成員資料管理' },
   { href: '/itineraries', label: '歷年行程', icon: MapPinned, description: '行程紀錄查詢' },
 ]
+const accessNavItems = [...navItems, { href: '/household', label: '家用備忘', icon: NotebookText, description: '設備位置與店務資訊' }]
 
 interface PortalLayoutProps {
   children: React.ReactNode
@@ -81,7 +82,7 @@ export default function PortalLayout({ children, onAccessLogout }: PortalLayoutP
 
   const navigation = (mobile = false) => (
     <nav className={mobile ? 'flex-1 space-y-2 px-4' : 'flex-1 space-y-1 p-3'} aria-label={mobile ? '行動版主要導覽' : '主要導覽'}>
-      {navItems.map((item) => {
+      {(onAccessLogout && !isDemoMode ? accessNavItems : navItems).map((item) => {
         const isActive = pathname.startsWith(item.href)
         const Icon = item.icon
         return (

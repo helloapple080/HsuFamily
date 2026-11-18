@@ -41,6 +41,15 @@ pnpm dev:cloudflare</pre>
 
 <p><code>check:cloudflare</code> 只建置 Vite 和檢查 Worker 打包。開啟 Wrangler 顯示的本機網址可查看網頁殼；私人 API 無驗簽設定回 503。沒有可部署的測試身分／驗簽後門。登入和照片的真實服務行為還須雲端驗證；本機測試不構成上線許可。</p>
 
+<h3>家用備忘：Cloudflare 專屬<span><a href="#label-E5-AE-B6-E7-94-A8-E5-82-99-E5-BF-98-EF-BC-9ACloudflare+-E5-B0-88-E5-B1-AC">&para;</a> <a href="#top">&uarr;</a></span></h3>
+<ul><li>
+<p>私人 SPA 的 <code>/household</code> 使用 React Query 呼叫 <code>/api/hosted/household</code>，只有核准家人能讀；管理員可以新增、修改或刪除。修改與刪除帶 <code>If-Match</code>，舊版本會回 <code>409</code>；缺少版本回 <code>428</code>。回應禁止共用快取。Next.js／Supabase 回退和 GitHub Pages 不提供此功能。</p>
+</li><li>
+<p><code>src/lib/hosted/household-contract.ts</code> 驗證純文字和欄位長度；<code>edge/router.ts</code> 先驗證 Access、D1 資格、同源及角色，<code>edge/household.ts</code> 用參數化 SQL 讀寫。分類為供水、店務、設備、其他，標題 100 字、位置 120 字、說明 2,000 字。D1 以同一 SQL 敘述限制新增超過 200 筆；搜尋只在瀏覽器記憶體篩選，不將關鍵字放入網址。</p>
+</li><li>
+<p><code>edge/migrations/0003_household_notes.sql</code> 只新增空白的 <code>portal_household_notes</code> 和索引，不改既有表。變更前先依<a href="cloudflare-staging.html">隔離站手冊</a>保全 D1；遷移後備份需包含這張表和有外鍵的 <code>portal_access</code>。回退 Worker 不會遺失備忘，但舊版不會顯示它；不要為了回退程式就刪表。這一區不使用 R2、Images 或第三方搜尋，也不需要買網域。</p>
+</li></ul>
+
 <h3>響應式版面與回歸驗收<span><a href="#label-E9-9F-BF-E6-87-89-E5-BC-8F-E7-89-88-E9-9D-A2-E8-88-87-E5-9B-9E-E6-AD-B8-E9-A9-97-E6-94-B6">&para;</a> <a href="#top">&uarr;</a></span></h3>
 <ul><li>
 <p><code>frontend/spa/index.html</code> 設定手機視窗；共用 <code>PortalLayout</code> 以 <code>md</code> 斷點切換手機上方選單和桌面側欄。活動月曆保留七欄、只允許月曆區左右捲，不應讓整頁橫向捲動。</p>

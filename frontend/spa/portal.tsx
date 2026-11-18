@@ -11,6 +11,7 @@ const routeComponents = {
   '/calendar': lazy(() => import('@/app/(portal)/calendar/page')),
   '/members': lazy(() => import('@/app/(portal)/members/page')),
   '/itineraries': lazy(() => import('@/app/(portal)/itineraries/page')),
+  '/household': lazy(() => import('@/components/features/household/HouseholdNotes')),
 }
 
 class RouteErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {

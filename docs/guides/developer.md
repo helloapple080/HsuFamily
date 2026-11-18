@@ -22,6 +22,12 @@ pnpm dev:cloudflare
 
 `check:cloudflare` 只建置 Vite 和檢查 Worker 打包。開啟 Wrangler 顯示的本機網址可查看網頁殼；私人 API 無驗簽設定回 503。沒有可部署的測試身分／驗簽後門。登入和照片的真實服務行為還須雲端驗證；本機測試不構成上線許可。
 
+### 家用備忘：Cloudflare 專屬
+
+- 私人 SPA 的 `/household` 使用 React Query 呼叫 `/api/hosted/household`，只有核准家人能讀；管理員可以新增、修改或刪除。修改與刪除帶 `If-Match`，舊版本會回 `409`；缺少版本回 `428`。回應禁止共用快取。Next.js／Supabase 回退和 GitHub Pages 不提供此功能。
+- `src/lib/hosted/household-contract.ts` 驗證純文字和欄位長度；`edge/router.ts` 先驗證 Access、D1 資格、同源及角色，`edge/household.ts` 用參數化 SQL 讀寫。分類為供水、店務、設備、其他，標題 100 字、位置 120 字、說明 2,000 字。D1 以同一 SQL 敘述限制新增超過 200 筆；搜尋只在瀏覽器記憶體篩選，不將關鍵字放入網址。
+- `edge/migrations/0003_household_notes.sql` 只新增空白的 `portal_household_notes` 和索引，不改既有表。變更前先依[隔離站手冊](cloudflare-staging.md)保全 D1；遷移後備份需包含這張表和有外鍵的 `portal_access`。回退 Worker 不會遺失備忘，但舊版不會顯示它；不要為了回退程式就刪表。這一區不使用 R2、Images 或第三方搜尋，也不需要買網域。
+
 ### 響應式版面與回歸驗收
 
 - `frontend/spa/index.html` 設定手機視窗；共用 `PortalLayout` 以 `md` 斷點切換手機上方選單和桌面側欄。活動月曆保留七欄、只允許月曆區左右捲，不應讓整頁橫向捲動。
