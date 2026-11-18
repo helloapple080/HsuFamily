@@ -1,9 +1,9 @@
 import { z } from 'zod'
-import { householdInput, householdLimit, householdNote } from '@/lib/hosted/household-contract'
+import { householdDatesHeader, householdInput, householdLimit, householdNote } from '@/lib/hosted/household-contract'
 import { portalResponse, readJson, requireVersion } from './http'
 
 const uuid = z.uuid()
-const columns = 'id, category, title, location, details, version, updated_at AS updatedAt'
+const columns = 'id, category, title, location, details, completed_on AS completedOn, due_on AS dueOn, version, updated_at AS updatedAt'
 
 async function unmatched(db: D1Database, id: string) {
   const current = await db.prepare('SELECT id FROM portal_household_notes WHERE id = ?').bind(id).first()
@@ -17,11 +17,21 @@ export async function handleHousehold(request: Request, rawId: string | undefine
   const id = rawId?.toLowerCase()
   if (id && !uuid.safeParse(id).success) return portalResponse(400, '備忘識別碼不正確')
   if (new URL(request.url).search) return portalResponse(400, '不支援網址查詢條件')
+  const includeDates = request.headers.get(householdDatesHeader) === '1'
+  function responseRow(row: unknown) {
+    const { completedOn, dueOn, ...legacy } = householdNote.parse(row)
+    return includeDates ? { ...legacy, completedOn, dueOn } : legacy
+  }
+  function reply<T>(status: number, message: string, data: T) {
+    const response = portalResponse(status, message, data)
+    if (includeDates) response.headers.set(householdDatesHeader, '1')
+    return response
+  }
 
   if (request.method === 'GET' && !id) {
     const { results } = await db.prepare(`SELECT ${columns} FROM portal_household_notes ORDER BY updated_at DESC, id DESC LIMIT ?`)
       .bind(householdLimit).all()
-    return portalResponse(200, '查詢成功', results.map((row) => householdNote.parse(row)))
+    return reply(200, '查詢成功', results.map(responseRow))
   }
   if (request.method === 'DELETE' && id) {
     const version = requireVersion(request)
@@ -36,21 +46,24 @@ export async function handleHousehold(request: Request, rawId: string | undefine
     const body = await readJson(request)
     if (!body.ok) return body.response
     const input = householdInput.safeParse(body.value)
-    if (!input.success) return portalResponse(400, '請檢查分類、標題、位置與說明的格式和長度')
-    const { category, title, location, details } = input.data
+    if (!input.success) return portalResponse(400, '請檢查備忘文字、分類及日期是否正確')
+    const { category, title, location, details, completedOn, dueOn } = input.data
+    const changeDates = completedOn !== undefined ? 1 : 0
     if (id) {
       const row = await db.prepare(`UPDATE portal_household_notes
-        SET category = ?, title = ?, location = ?, details = ?, version = version + 1,
+        SET category = ?, title = ?, location = ?, details = ?,
+            completed_on = CASE WHEN ? THEN ? ELSE completed_on END,
+            due_on = CASE WHEN ? THEN ? ELSE due_on END, version = version + 1,
             updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
         WHERE id = ? AND version = ? RETURNING ${columns}`)
-        .bind(category, title, location, details, id, version).first()
-      return row ? portalResponse(200, '已儲存', householdNote.parse(row)) : unmatched(db, id)
+        .bind(category, title, location, details, changeDates, completedOn ?? null, changeDates, dueOn ?? null, id, version).first()
+      return row ? reply(200, '已儲存', responseRow(row)) : unmatched(db, id)
     }
     // 同一個 SQL 敘述檢查上限並新增，避免同時操作超過上限。
-    const row = await db.prepare(`INSERT INTO portal_household_notes (id, category, title, location, details, created_by)
-      SELECT ?, ?, ?, ?, ?, ? WHERE (SELECT count(*) FROM portal_household_notes) < ? RETURNING ${columns}`)
-      .bind(crypto.randomUUID(), category, title, location, details, creatorId, householdLimit).first()
-    return row ? portalResponse(201, '已儲存', householdNote.parse(row))
+    const row = await db.prepare(`INSERT INTO portal_household_notes (id, category, title, location, details, completed_on, due_on, created_by)
+      SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE (SELECT count(*) FROM portal_household_notes) < ? RETURNING ${columns}`)
+      .bind(crypto.randomUUID(), category, title, location, details, completedOn ?? null, dueOn ?? null, creatorId, householdLimit).first()
+    return row ? reply(201, '已儲存', responseRow(row))
       : portalResponse(409, '備忘已達筆數上限', null, ['HOUSEHOLD_LIMIT'])
   }
   return portalResponse(405, '不支援此操作')

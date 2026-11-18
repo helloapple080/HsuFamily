@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { CalendarDays, House, LogOut, MapPinned, Menu, NotebookText, ShieldCheck, Users } from 'lucide-react'
+import { CalendarDays, House, LogOut, MapPinned, NotebookText, Settings, ShieldCheck, Users } from 'lucide-react'
 import api from '@/lib/api'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/authStore'
@@ -17,6 +17,7 @@ import {
   SheetDescription,
   SheetHeader,
   SheetTitle,
+  SheetTrigger,
 } from '@/components/ui/sheet'
 import DemoModeBanner from '@/components/common/DemoModeBanner'
 import ThemeSwitcher from '@/components/theme/ThemeSwitcher'
@@ -80,9 +81,10 @@ export default function PortalLayout({ children, onAccessLogout }: PortalLayoutP
     )
   }
 
-  const navigation = (mobile = false) => (
-    <nav className={mobile ? 'flex-1 space-y-2 px-4' : 'flex-1 space-y-1 p-3'} aria-label={mobile ? '行動版主要導覽' : '主要導覽'}>
-      {(onAccessLogout && !isDemoMode ? accessNavItems : navItems).map((item) => {
+  const items = onAccessLogout && !isDemoMode ? accessNavItems : navItems
+  const navigation = (
+    <nav className="flex-1 space-y-1 p-3" aria-label="主要導覽">
+      {items.map((item) => {
         const isActive = pathname.startsWith(item.href)
         const Icon = item.icon
         return (
@@ -91,7 +93,6 @@ export default function PortalLayout({ children, onAccessLogout }: PortalLayoutP
             href={item.href}
             aria-label={item.label}
             aria-current={isActive ? 'page' : undefined}
-            onClick={mobile ? () => setIsMenuOpen(false) : undefined}
             className={`flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
               isActive
                 ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
@@ -126,7 +127,7 @@ export default function PortalLayout({ children, onAccessLogout }: PortalLayoutP
           </div>
         </div>
         <Separator />
-        {navigation()}
+        {navigation}
         <Separator />
         <div className="shrink-0 space-y-3 p-4">
           <div className="flex items-center gap-3">
@@ -151,40 +152,47 @@ export default function PortalLayout({ children, onAccessLogout }: PortalLayoutP
         </div>
       </aside>
 
-      <header className="fixed inset-x-0 top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-card px-4 md:hidden">
+      <header className="fixed inset-x-0 top-0 z-30 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center justify-between border-b border-border bg-card pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] pt-[env(safe-area-inset-top)] md:hidden">
         <Link href="/calendar" className="flex min-h-11 items-center gap-2 font-bold">
           <House aria-hidden="true" className="size-5" />
           許氏入口網
         </Link>
-        <Button variant="ghost" size="icon" className="size-11" aria-label="開啟導覽選單" onClick={() => setIsMenuOpen(true)}>
-          <Menu aria-hidden="true" />
-        </Button>
+        <Sheet open={isMenuOpen} onOpenChange={setIsMenuOpen}>
+          <SheetTrigger render={<Button variant="ghost" size="icon" className="size-11" aria-label="帳號與顯示設定" />}>
+            <Settings aria-hidden="true" />
+          </SheetTrigger>
+          <SheetContent side="right" className="w-[min(20rem,85vw)] overflow-y-auto overscroll-y-contain bg-card">
+            <SheetHeader className="pt-[max(1rem,env(safe-area-inset-top))]">
+              <SheetTitle>帳號與顯示設定</SheetTitle>
+              <SheetDescription>切換主題或登出入口網。</SheetDescription>
+            </SheetHeader>
+            <div className="shrink-0 space-y-3 border-t border-border p-4">
+              <p className="truncate text-sm">{user?.displayName}</p>
+              <ThemeSwitcher />
+              <Button variant="outline" className="min-h-11 w-full" onClick={handleLogout}>
+                <LogOut aria-hidden="true" />
+                登出
+              </Button>
+            </div>
+          </SheetContent>
+        </Sheet>
       </header>
 
-      <Sheet open={isMenuOpen} onOpenChange={setIsMenuOpen}>
-        <SheetContent side="left" className="w-[min(20rem,85vw)] overflow-y-auto overscroll-y-contain bg-card">
-          <SheetHeader>
-            <SheetTitle>許氏入口網</SheetTitle>
-            <SheetDescription>選擇要前往的功能</SheetDescription>
-          </SheetHeader>
-          {navigation(true)}
-          <div className="shrink-0 space-y-3 border-t border-border p-4">
-            <p className="truncate text-sm">{user?.displayName}</p>
-            <ThemeSwitcher />
-            <Button variant="outline" className="min-h-11 w-full" onClick={handleLogout}>
-              <LogOut aria-hidden="true" />
-              登出
-            </Button>
-          </div>
-        </SheetContent>
-      </Sheet>
-
-      <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 pt-16 md:ml-64 md:pt-0">
-        <div className="mx-auto w-full max-w-7xl space-y-4 p-4 sm:p-6 lg:px-10 lg:py-8">
+      <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 pt-[calc(3.5rem+env(safe-area-inset-top))] pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:ml-64 md:py-0">
+        <div className="mx-auto w-full max-w-7xl space-y-4 px-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] py-4 sm:p-6 lg:px-10 lg:py-8">
           {isDemoMode && <DemoModeBanner />}
           {children}
         </div>
       </main>
+
+      <nav data-portal-mobile-nav aria-label="手機主要導覽" className="fixed inset-x-0 bottom-0 z-30 grid auto-cols-fr grid-flow-col gap-1 border-t border-border bg-card pr-[max(0.375rem,env(safe-area-inset-right))] pb-[calc(0.375rem+env(safe-area-inset-bottom))] pl-[max(0.375rem,env(safe-area-inset-left))] pt-1.5 md:hidden">
+        {items.map(({ href, label, icon: Icon }) => <Link key={href} href={href}
+          aria-current={pathname === href || pathname === `${href}/` || (pathname === '/' && href === '/calendar') ? 'page' : undefined}
+          className="flex min-h-12 min-w-0 touch-manipulation flex-col items-center justify-center gap-0.5 rounded-lg px-0.5 text-center text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring aria-[current=page]:bg-primary aria-[current=page]:font-semibold aria-[current=page]:text-primary-foreground">
+          <Icon aria-hidden="true" className="size-5 shrink-0" />
+          <span>{label}</span>
+        </Link>)}
+      </nav>
     </div>
   )
 }

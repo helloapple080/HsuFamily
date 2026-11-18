@@ -26,17 +26,21 @@ pnpm dev:cloudflare
 
 - 私人 SPA 的 `/household` 使用 React Query 呼叫 `/api/hosted/household`，只有核准家人能讀；管理員可以新增、修改或刪除。修改與刪除帶 `If-Match`，舊版本會回 `409`；缺少版本回 `428`。回應禁止共用快取。Next.js／Supabase 回退和 GitHub Pages 不提供此功能。
 - `src/lib/hosted/household-contract.ts` 驗證純文字和欄位長度；`edge/router.ts` 先驗證 Access、D1 資格、同源及角色，`edge/household.ts` 用參數化 SQL 讀寫。分類為供水、店務、設備、其他，標題 100 字、位置 120 字、說明 2,000 字。D1 以同一 SQL 敘述限制新增超過 200 筆；搜尋只在瀏覽器記憶體篩選，不將關鍵字放入網址。
-- `edge/migrations/0003_household_notes.sql` 只新增空白的 `portal_household_notes` 和索引，不改既有表。變更前先依[隔離站手冊](cloudflare-staging.md)保全 D1；遷移後備份需包含這張表和有外鍵的 `portal_access`。回退 Worker 不會遺失備忘，但舊版不會顯示它；不要為了回退程式就刪表。這一區不使用 R2、Images 或第三方搜尋，也不需要買網域。
+- `0003_household_notes.sql` 建立 `portal_household_notes` 與索引；`0004_household_dates.sql` 加入可空的 `completed_on`／`due_on`。新 API 接受 1901–2100 年的合法 `YYYY-MM-DD`；新版傳入兩欄（可各自為 `null`），舊版兩欄都沒傳時，更新會保留日期。明確傳 `null` 才會清除；舊紀錄沒有日期時視為未設定。
+- 新版前端讀取備忘時送 `Portal-Household-Dates: 1`；只有帶標頭的請求才會收到擴充格式，避免舊分頁拒讀未知欄位。Worker 回退時，舊版不回能力標頭，新分頁重新整理後仍可編輯文字。編輯日期時若收到回退後的資料，保留草稿、不會默默丟棄日期。
+- 先依[隔離站手冊](cloudflare-staging.md)還原演練並核對筆數，再套 `0004`，最後發布新版 Worker。回退 Worker 保留兩個新欄位與資料，舊畫面不顯示日期；不要刪欄位、刪表或用舊備份覆蓋現有庫。備份要同時包含備忘表和外鍵依賴的 `portal_access`。
+- `civil-date.ts` 用 `Asia/Taipei` 取今天，日數運算不讀取瀏覽器時區。備忘期限排序和狀態只在前端計算，沒有排程、推播、R2、Images 或第三方搜尋。拜拜日期用同一個今天取得本年、次年的下一次出現，獨立於查詢年份，沿用原有農曆及閏月規則。
 
 ### 響應式版面與回歸驗收
 
-- `frontend/spa/index.html` 設定手機視窗；共用 `PortalLayout` 以 `md` 斷點切換手機上方選單和桌面側欄。活動月曆保留七欄、只允許月曆區左右捲，不應讓整頁橫向捲動。
+- `frontend/spa/index.html` 設定手機視窗；共用 `PortalLayout` 以 `md` 斷點切換手機底部導覽和桌面側欄。手機主導覽觸控高度至少 48 CSS px，標示 `aria-current`，右上選單只放帳號與顯示設定。活動月曆保留七欄，只有月曆區能左右捲，不應讓整頁橫向捲動。
+- 備忘表單在 320×568、390×844 和 568×320 檢查不橫向溢出，表單本體可捲而按鈕固定在底部。開啟時焦點停在標題，取消時回到觸發按鈕。模擬尺寸可驗證布局，實機鍵盤和日期選擇器仍要另驗。
 - 在隔離站使用已核准帳號，以 320×568、390×844 的 CSS 視窗尺寸檢查主要頁面與選單，實際換月、搜尋並開啟表單；比較整頁捲動寬度與視窗內容寬度。Safari／Chrome 真機另外測斷點、觸控、地址列、鍵盤遮擋及回到上一頁。
 - 行程表單回歸：把視窗切到 568×320，選「歷年行程 → 新增行程」。表單外框須留在視窗內，表單應可獨立上下捲到取消與儲存。空表單按「儲存」只顯示必填錯誤，不新增資料；再按「取消」應可關閉。舊版外框約 `-97` 到 `417` px，不可捲；修正版約 `16` 到 `304` px，可捲。修正在 `features/itineraries/ItineraryDialog`，未改共用 shadcn/ui 元件、API 或角色。
 
 ### 目前進度與零額外扣款規則
 
-先看[這次實作紀錄與可重做步驟](cloudflare-staging.md)。Workers Free 與測試 D1 已有一個受 Zero Trust Free 保護的固定網址；只允許一個 Cloudflare 帳號，已驗證匿名進不去、管理員可讀取假資料。R2 已開通，但本入口網沒有建立桶，也沒有連接 R2 或 Images。下列完整驗收流程含**未獲執行許可的超額計費服務**，不是已完成的清單。零額外扣款是硬限制時，請勿執行其中 R2／Images 連接步驟。
+先看[這次實作紀錄與可重做步驟](cloudflare-staging.md)。Workers Free 與測試 D1 已有一個受 Zero Trust Free 保護的固定網址；只允許一個 Cloudflare 帳號，已驗證匿名進不去。隔離站現在沒有正式資料，也不需要灌入假資料才能查看介面。R2 已開通，但本入口網沒有建立桶，也沒有連接 R2 或 Images。下列完整驗收流程含**未獲執行許可的超額計費服務**，不是已完成的清單。零額外扣款是硬限制時，請勿執行其中 R2／Images 連接步驟。
 
 ### 完整雲端驗收流程（目前只執行免費且已驗證的部分）
 

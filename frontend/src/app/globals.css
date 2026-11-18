@@ -278,3 +278,8 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+@media (width < 48rem) {
+  html:has([data-portal-mobile-nav]) {
+    scroll-padding-block: calc(4rem + env(safe-area-inset-top)) calc(4.5rem + env(safe-area-inset-bottom));
+  }
+}

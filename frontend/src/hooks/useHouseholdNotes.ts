@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import api from '@/lib/api'
-import { householdLimit, householdNote, type HouseholdInput, type HouseholdNote } from '@/lib/hosted/household-contract'
+import { householdDatesHeader, householdLimit, householdNote, type HouseholdInput, type HouseholdNote } from '@/lib/hosted/household-contract'
 import { versionHeaders } from '@/lib/recordVersion'
 import { useAuthStore } from '@/stores/authStore'
 import type { ApiResponse } from '@/types/api'
@@ -22,12 +22,15 @@ export function useHouseholdNotes() {
   const notes = useQuery({
     queryKey, enabled: Boolean(userId), staleTime: 0,
     queryFn: async ({ signal }) => {
-      const { data } = await api.get<ApiResponse<unknown>>(url, { signal })
-      return noteList.parse(data.data)
+      const { data, headers } = await api.get<ApiResponse<unknown>>(url, { signal, headers: { [householdDatesHeader]: '1' } })
+      return { items: noteList.parse(data.data), supportsDates: headers[householdDatesHeader] === '1' }
     },
   })
   const save = useMutation({
     mutationFn: async ({ target, input }: SaveNote) => {
+      if (!notes.data?.supportsDates && (input.completedOn !== undefined || input.dueOn !== undefined)) {
+        throw new Error('目前無法儲存備忘日期')
+      }
       if (target) await api.put(`${url}/${target.id}`, input, versionHeaders(target.version))
       else await api.post(url, input)
     }, onSuccess: refresh,

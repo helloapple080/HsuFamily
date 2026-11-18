@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useWorshipRules } from '@/hooks/useWorshipRules'
 import { formatLunarDate, solarToLunar } from '@/lib/lunar'
+import { taipeiToday } from '@/lib/hosted/civil-date'
 import { getWorshipDates } from '@/lib/hosted/worship'
 import type { WorshipInput, WorshipRule } from '@/lib/hosted/worship-contract'
 import { useAuthStore } from '@/stores/authStore'
@@ -15,7 +16,11 @@ import { isVersionConflict, versionConflictMessage } from '@/lib/recordVersion'
 
 const emptyRule: WorshipInput = { title: '', lunarMonth: 1, lunarDay: 1, leapMonthPolicy: 'RegularOnly', notes: '' }
 const emptyRules: WorshipRule[] = []
-const yearFormat = new Intl.DateTimeFormat('en', { timeZone: 'Asia/Taipei', year: 'numeric' })
+
+function worshipEntries(entries: readonly WorshipRule[], year: number) {
+  return entries.flatMap((rule) => getWorshipDates(rule, year).map((date) => ({ date, rule })))
+    .sort((a, b) => a.date.localeCompare(b.date))
+}
 
 function lunarLabel(date: string) {
   const [year, month, day] = date.split('-').map(Number)
@@ -24,28 +29,46 @@ function lunarLabel(date: string) {
 }
 
 export default function HostedCalendar() {
-  const [yearText, setYearText] = useState(() => yearFormat.format(new Date()))
+  const [yearText, setYearText] = useState(() => taipeiToday().slice(0, 4))
   const [editor, setEditor] = useState<WorshipRule | 'new' | null>(null)
   const isAdmin = useAuthStore((state) => state.isAdmin)
   const { rules, save, remove } = useWorshipRules()
   const year = Number(yearText)
   const validYear = Number.isInteger(year) && year >= 1901 && year <= 2100
   const entries = rules.data ?? emptyRules
-  const dates = useMemo(() => !validYear ? [] : entries
-    .flatMap((rule) => getWorshipDates(rule, year).map((date) => ({ date, rule })))
-    .sort((a, b) => a.date.localeCompare(b.date)), [entries, validYear, year])
+  const today = taipeiToday()
+  const currentYear = Number(today.slice(0, 4))
+  const currentYearDates = useMemo(() => currentYear >= 1901 && currentYear <= 2100
+    ? worshipEntries(entries, currentYear) : [], [entries, currentYear])
+  const dates = useMemo(() => !validYear ? [] : year === currentYear ? currentYearDates : worshipEntries(entries, year),
+    [entries, validYear, year, currentYear, currentYearDates])
+  const upcoming = useMemo(() => {
+    const remainingThisYear = currentYearDates.filter(({ date }) => date >= today)
+    const candidate = remainingThisYear.length ? remainingThisYear
+      : currentYear >= 1901 && currentYear < 2100 ? worshipEntries(entries, currentYear + 1) : []
+    return candidate.filter(({ date }) => date === candidate[0]?.date)
+  }, [entries, currentYear, currentYearDates, today])
+  const nextDate = upcoming[0]?.date
 
   return (
     <section className="max-w-4xl space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
-        <header className="space-y-1.5">
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">農曆拜拜行事曆</h1>
-          <p className="text-sm text-muted-foreground">依你選的國曆年份換算家族拜拜日期。</p>
-        </header>
-        <label className="grid w-full max-w-36 gap-1.5 text-sm font-medium">國曆年份
-          <Input type="number" min={1901} max={2100} value={yearText} onChange={(event) => setYearText(event.target.value)} aria-invalid={!validYear} className="h-11 tabular-nums" />
-        </label>
-      </div>
+      <header className="space-y-1.5">
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">農曆拜拜行事曆</h1>
+        <p className="text-sm text-muted-foreground">查看下一次拜拜，或依國曆年份查日期。</p>
+      </header>
+      {rules.isSuccess && <section aria-labelledby="next-worship" className="space-y-2 rounded-xl border border-border bg-card p-4 sm:p-5">
+        <h2 id="next-worship" className="font-semibold">下一次拜拜</h2>
+        {nextDate ? <>
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <time className="text-xl font-semibold tabular-nums" dateTime={nextDate}>{nextDate}</time>
+            <span className="text-sm text-muted-foreground">{lunarLabel(nextDate)}{nextDate === today ? ' · 今天' : ''}</span>
+          </div>
+          <ul className="space-y-1">{upcoming.map(({ rule }) => <li key={rule.id} className="wrap-anywhere">{rule.title}</li>)}</ul>
+        </> : <p className="text-sm text-muted-foreground">{entries.length ? '今年剩餘日期及明年沒有符合的拜拜，可在下方切換年份查詢。' : '建立拜拜規則後，這裡會顯示最接近的日期。'}</p>}
+      </section>}
+      <label className="grid w-full max-w-36 gap-1.5 text-sm font-medium">國曆年份
+        <Input name="year" type="number" inputMode="numeric" min={1901} max={2100} value={yearText} onChange={(event) => setYearText(event.target.value)} aria-invalid={!validYear} className="h-11 text-base tabular-nums" />
+      </label>
       {!validYear && <p role="alert">請輸入 1901 至 2100 年。</p>}
       {rules.isPending && <p role="status">載入行事曆中…</p>}
       {rules.isError && <div role="alert"><p>暫時無法讀取拜拜規則。</p><Button variant="outline" onClick={() => void rules.refetch()}>重試</Button></div>}

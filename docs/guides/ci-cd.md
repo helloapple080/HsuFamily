@@ -46,7 +46,7 @@ pnpm build:pages && pnpm test:pages
 pnpm test edge/tests/access-lifecycle.test.ts
 ```
 
-預期 4 項通過。這個測試用合成簽章權杖、正式 Worker 的 API 程式和 [Wrangler 本機 D1](https://developers.cloudflare.com/workers/wrangler/api/#getplatformproxy)，驗證唯讀家人拒寫、未核准拒讀、停權後舊權杖拒讀、以及管理員跨站寫入遭拒；同時確認原資料沒被改。完整 `pnpm test` 和 CI 都會執行它。無需 Cloudflare 登入、真實信箱或雲端 D1，更不是 Access 登入頁或實際手機驗收。
+預期 7 項通過。測試用合成簽章權杖、正式 Worker 的 API 程式和 [Wrangler 本機 D1](https://developers.cloudflare.com/workers/wrangler/api/#getplatformproxy)，檢查唯讀拒寫、未核准拒讀、停權後舊權杖拒讀、管理員跨站寫入遭拒，以及備忘權限、筆數限制、日期和舊客戶端相容性。完整 `pnpm test` 和 CI 都會執行；無需 Cloudflare 登入、真實信箱或雲端 D1，也不算實際 Access 登入或手機驗收。
 
 改完用 `git status`、`git diff` 確認只有這次的檔案，再用 `git add <這次修改的實際檔案>`、英文 Conventional Commit 訊息提交，最後執行 `git push origin codex/cloudflare-react`。不要加入 `.env`、`wrangler.staging.local.jsonc`、權杖、D1 匯出、驗證碼、信箱或原始照片。新開的一般工作分支不在 CI 的推送名單裡；若要走 PR 檢查，先核對目標為 `main`，但不要未經驗收就合併。
 
@@ -107,9 +107,9 @@ curl -sS --max-time 15 -o /dev/null -w '%{http_code}\n' "$stage_url/"
 curl -sS --max-time 15 -o /dev/null -w '%{http_code}\n' "$stage_url/api/hosted/auth/me"
 ```
 
-5. 白名單管理員登入，確認身分正確、原有行事曆資料可讀；依改動測行事曆、行程或手機表單。若是家用備忘版本，另以無登入狀態驗證 `/household`、`/api/hosted/household` 都回 `302`；登入後從選單打開，初次部署應看到空白狀態，無須把假資料寫入這一區。寫入與唯讀角色先用本機隔離測試；真實家人帳號須另驗。記下「日期／Git SHA／CI 連結／前後 Worker 版本／測試結果／仍未驗收項目」。不要把雲端登入、角色或照片驗收用 CI 綠燈帶過。
+5. 白名單管理員登入，確認身分正確；若沒有行事曆資料，預期顯示空白。家用備忘版本須驗證匿名 `/household`、`/api/hosted/household` 都回 `302`；登入後從底部導覽開啟，檢查表單的兩個選填日期欄和取消按鈕，無須寫入假資料。日期排序、跨年、寫入和唯讀先用本機隔離測試；真實家人帳號和手機鍵盤另驗。記下「日期／Git SHA／CI 連結／前後 Worker 版本／測試結果／仍未驗收項目」。CI 綠燈不能代替這些驗收。
 
-6. 備忘的 `0003_household_notes.sql` 僅新增資料表，舊版 Worker 仍可用。遇到前端錯誤時，可回退 Worker 至遷移前相容版本，備忘會暫時不可見但仍保留在 D1；不要刪表或還原覆蓋現有 D1。依 [隔離站手冊](cloudflare-staging.md)先備份含 `portal_household_notes` 的新結構。
+6. `0003_household_notes.sql` 新增資料表，`0004_household_dates.sql` 只新增可選日期欄。遇到前端錯誤時，可只回退 Worker；回退到支援備忘但不支援日期的版本時，文字仍可讀寫，日期暫不顯示但保留在 D1。不要刪表或用舊備份覆蓋現有 D1。依 [隔離站手冊](cloudflare-staging.md)備份含 `portal_household_notes` 的結構。
 
 ### 有改儲存或版本控制時：驗證舊編輯不會蓋掉新資料
 

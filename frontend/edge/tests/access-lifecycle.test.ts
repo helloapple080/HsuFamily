@@ -43,7 +43,7 @@ beforeAll(async () => {
     envFiles: [],
   })
   const db = database()
-  for (const migration of ['0001_portal.sql', '0002_photos.sql', '0003_household_notes.sql']) {
+  for (const migration of ['0001_portal.sql', '0002_photos.sql', '0003_household_notes.sql', '0004_household_dates.sql']) {
     const sql = await readFile(new URL(`../migrations/${migration}`, import.meta.url), 'utf8')
     await db.batch(unstable_splitSqlQuery(sql).map((statement) => db.prepare(statement)))
   }
@@ -74,11 +74,12 @@ beforeEach(() => {
 
 afterAll(async () => { await platform?.dispose() })
 
-function call(identity: Identity, path: string, method = 'GET', from = origin, input: object = { ...worship, title: '不該寫入的假資料' }, match: string | null = '"1"') {
+function call(identity: Identity, path: string, method = 'GET', from = origin, input: object = { ...worship, title: '不該寫入的假資料' }, match: string | null = '"1"', withDates = false) {
   const token = tokens.get(identity)
   if (!token) throw new Error('未建立合成測試權杖')
   const headers = new Headers({ 'Cf-Access-Jwt-Assertion': token, Origin: from })
   if (match) headers.set('If-Match', match)
+  if (withDates) headers.set('Portal-Household-Dates', '1')
   const body = method === 'POST' || method === 'PUT' ? JSON.stringify(input) : undefined
   if (body) headers.set('Content-Type', 'application/json')
   return worker.fetch(new Request(`${origin}${path}`, { method, headers, body }), {
@@ -179,5 +180,31 @@ describe('Cloudflare 私人 API 權限整合演練', () => {
     } finally {
       await db.prepare("DELETE FROM portal_household_notes WHERE id LIKE '70000000-0000-4000-8000-%'").run()
     }
+  })
+
+  it('備忘日期可設定及清空，舊版未傳日期則保留', async () => {
+    const dates = { completedOn: '2026-11-19', dueOn: '2027-02-28' }
+    for (const bad of [{ ...dates, dueOn: '2027-02-29' }, { ...dates, dueOn: '2026-10-01' }, { dueOn: dates.dueOn }]) {
+      expect((await call('admin', householdPath, 'POST', origin, { ...note, ...bad })).status).toBe(400)
+    }
+    const created = await call('admin', householdPath, 'POST', origin, { ...note, ...dates }, null, true)
+    expect(created.status).toBe(201)
+    expect(created.headers.get('Portal-Household-Dates')).toBe('1')
+    const body = await created.json()
+    expect(body).toMatchObject({ data: dates })
+    const { data: { id } } = z.object({ data: z.object({ id: z.uuid() }) }).parse(body)
+    const path = `${householdPath}/${id}`
+    const legacyEdit = z.object({ data: z.unknown() }).parse(await (await call('admin', path, 'PUT', origin, note)).json())
+    const legacyList = z.object({ data: z.array(z.unknown()) }).parse(await (await call('reader', householdPath)).json())
+    const legacyRow = { id, ...note, version: 2, updatedAt: expect.any(String) }
+    expect(legacyEdit.data).toEqual(legacyRow)
+    expect(legacyList.data).toEqual([legacyRow])
+    const datedList = await call('reader', householdPath, 'GET', origin, {}, null, true)
+    expect(datedList.headers.get('Portal-Household-Dates')).toBe('1')
+    expect(await datedList.json()).toMatchObject({ data: [{ id, ...dates }] })
+    const cleared = await call('admin', path, 'PUT', origin, { ...note, completedOn: null, dueOn: null }, '"2"', true)
+    expect(cleared.status).toBe(200)
+    expect(await cleared.json()).toMatchObject({ data: { completedOn: null, dueOn: null, version: 3 } })
+    expect((await call('admin', path, 'DELETE', origin, note, '"3"')).status).toBe(200)
   })
 })

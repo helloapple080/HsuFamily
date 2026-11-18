@@ -4,7 +4,7 @@
 
 ## 結論先看
 
-[開啟 Cloudflare 私人測試站](https://hsu-family-staging.helloapple080.workers.dev/) → 按 **Cloudflare** → 使用原本的 Cloudflare 帳號。沒有另設網站密碼，這個測試站目前不寄一次性登入碼，也不開放家人註冊。只有持有人的信箱能登入，測試資料只有一筆假的拜拜規則。請勿輸入正式資料或照片；正式網站、MongoDB、既有照片未動。
+[開啟 Cloudflare 私人測試站](https://hsu-family-staging.helloapple080.workers.dev/) → 按 **Cloudflare** → 使用原本的 Cloudflare 帳號。沒有另設網站密碼，不寄一次性登入碼，不開放註冊；目前只有持有人能登入。測試站連的是雲端 D1，未搬入正式資料，原先的演練紀錄已不在；不需要重新灌假資料才能查看介面。請勿輸入正式資料或照片；正式站、MongoDB、既有照片未動。
 
 ## 實際做了什麼
 
@@ -70,7 +70,7 @@ sqlite3 -bail "$audit_dir/restore.sqlite" "SELECT (SELECT count(*) FROM portal_a
 shasum -a 256 "$audit_dir/backup.sql"
 ```
 
-預期第一條檢查印出 `ok`，外鍵無錯誤。第二條檢查在未新增備忘的測試資料為 `1|1|0|0`，遷移前則是 `1|1|0`。備份本身不進 Git 或 Obsidian。若使用的是既有站，確認只有 `0003_household_notes.sql` 待套、先驗證遷移前備份能還原，再用上面的 `migrations apply` 套用，核對既有表筆數不變、新表為 0 筆。本次沒有備忘的假資料種子；不必重跑舊的拜拜資料匯入。參考 [Cloudflare D1 匯入與匯出說明](https://developers.cloudflare.com/d1/best-practices/import-export-data/)。
+預期第一條檢查印出 `ok`，外鍵無錯誤。第二條記下實際筆數，和遷移後比較；不是固定的樣本數。備份本身不進 Git 或 Obsidian。只套 `0003` 時，新備忘表為 0 筆；只套 `0004_household_dates.sql` 時，先在本機還原副本執行該 SQL，確認原紀錄和版本不變，兩個新欄位預設為空。確認遠端待套檔名正確後再執行 `migrations apply`，核對沒有待套遷移、既有表筆數不變，再部署 Worker。不必重跑舊的拜拜資料匯入。參考 [Cloudflare D1 匯入與匯出說明](https://developers.cloudflare.com/d1/best-practices/import-export-data/)。
 
 ### 重做登入與固定網址
 
@@ -85,4 +85,4 @@ shasum -a 256 "$audit_dir/backup.sql"
 - [R2 Standard](https://developers.cloudflare.com/r2/pricing/#free-tier) 有免費用量，帳戶總用量超額會計費。[Cloudflare 支出控制說明](https://developers.cloudflare.com/billing/manage/spend-management/) 指出真正的止扣上限不涵蓋 R2，也不保證帳單上限；[預算警報](https://developers.cloudflare.com/billing/manage/budget-alerts/) 只寄通知。要求零額外扣款時不連接 R2；若帳戶只為此專案開通 R2、又不打算用，可由帳戶持有人在帳單頁檢查及取消訂閱，切勿刪除其他用途的資源。
 - Zero Trust Free 的「今天 US$0」是方案價格，不是帳戶零元止扣設定。[官方開通說明](https://developers.cloudflare.com/cloudflare-one/setup/) 與[官方席次說明](https://developers.cloudflare.com/cloudflare-one/team-and-resources/users/seat-management/)可核對方案與登入上限。本次僅用一席測試，沒有升級或加購；不接受額外計費服務時，維持 R2 和 Images 未連接。
 - **還不能切正式站。** 未使用第二個真實信箱驗證未白名單與唯讀家人，雲端尚未實測撤權和已登入的跨站寫入，也沒有雲端照片上傳／備份與正式資料搬移。這些不能用本機測試或已通過的匿名檢查代替。需要操作公開版時，仍可用[唯讀假資料展示](https://helloapple080.github.io/HsuFamily/)。
-- **下一步：** 用真手機登入隔離站，只看假資料，確認選單、月曆左右滑與鍵盤開啟後的表單。第二位測試者的信箱尚未核准，白名單維持單人；之後有核准帳號再驗證唯讀與撤權。費用限制維持不開 R2／Images、不搬正式資料、不切換正式站。
+- **下一步：** 用真手機登入隔離站，確認底部導覽、月曆左右滑、備忘表單鍵盤與日期選擇器；不需寫入正式資料。第二位測試者的信箱尚未核准，白名單維持單人；之後有核准帳號再驗證唯讀與撤權。費用限制維持不接 R2／Images、不搬正式資料、不切換正式站。
